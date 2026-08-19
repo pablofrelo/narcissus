@@ -1,0 +1,176 @@
+package pl.yggdrasil.narcissus2.system
+
+import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.location.GnssStatus
+import android.location.LocationManager
+import android.os.BatteryManager
+import android.telephony.CellSignalStrength
+import android.telephony.SignalStrength
+import android.telephony.TelephonyCallback
+import android.telephony.TelephonyManager
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
+
+/**
+ * Trzy niezależne źródła scalone w jeden strumień.
+ *
+ * Każde źródło jest osobnym callbackFlow, żeby awaria (albo brak uprawnienia)
+ * jednego nie wywracała pozostałych — brak GPS-a nie może zgasić wskaźnika
+ * baterii.
+ */
+class SystemMonitor(private val context: Context) {
+
+    fun status(): Flow<SystemStatus> =
+        combine(gnss(), cellular(), battery()) { g, c, b ->
+            SystemStatus(g, c, b)
+        }.conflate()
+
+    // ----------------------------------------------------------------
+    // GNSS
+    // ----------------------------------------------------------------
+
+    private fun gnss(): Flow<SystemStatus.Gnss> = callbackFlow {
+        val lm = context.getSystemService(LocationManager::class.java)
+
+        if (lm == null || !granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            trySend(SystemStatus.Gnss())
+            awaitClose { }
+            return@callbackFlow
+        }
+
+        val cb = object : GnssStatus.Callback() {
+            override fun onSatelliteStatusChanged(s: GnssStatus) {
+                var used = 0
+                var top = 0f
+
+                for (i in 0 until s.satelliteCount) {
+                    if (s.usedInFix(i)) used++
+                    val cn0 = s.getCn0DbHz(i)
+                    if (cn0 > top) top = cn0
+                }
+
+                trySend(
+                    SystemStatus.Gnss(
+                        visible = s.satelliteCount,
+                        usedInFix = used,
+                        topCn0 = top,
+                        // Cztery satelity to matematyczne minimum na fix 3D.
+                        hasFix = used >= 4,
+                    ),
+                )
+            }
+
+            override fun onStopped() {
+                trySend(SystemStatus.Gnss())
+            }
+        }
+
+        try {
+            lm.registerGnssStatusCallback(ContextCompat.getMainExecutor(context), cb)
+        } catch (e: SecurityException) {
+            trySend(SystemStatus.Gnss())
+        }
+
+        awaitClose {
+            runCatching { lm.unregisterGnssStatusCallback(cb) }
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // GSM / LTE / NR
+    // ----------------------------------------------------------------
+
+    /**
+     * Poziom 0..4 bierzemy wprost z systemu — jest to ten sam poziom, który
+     * pokazuje pasek statusu. Nie liczymy go sami z dBm, bo progi różnią się
+     * między technologiami i bywają dostrajane przez producenta.
+     */
+    private fun cellular(): Flow<SystemStatus.Cellular> = callbackFlow {
+        val tm = context.getSystemService(TelephonyManager::class.java)
+
+        if (tm == null) {
+            trySend(SystemStatus.Cellular(offline = true))
+            awaitClose { }
+            return@callbackFlow
+        }
+
+        val cb = object : TelephonyCallback(), TelephonyCallback.SignalStrengthsListener {
+            override fun onSignalStrengthsChanged(s: SignalStrength) {
+                val cells: List<CellSignalStrength> = s.cellSignalStrengths
+                val best = cells.maxByOrNull { it.level }
+
+                trySend(
+                    SystemStatus.Cellular(
+                        level = best?.level ?: -1,
+                        dbm = best?.dbm,
+                        offline = cells.isEmpty(),
+                    ),
+                )
+            }
+        }
+
+        try {
+            tm.registerTelephonyCallback(ContextCompat.getMainExecutor(context), cb)
+        } catch (e: SecurityException) {
+            trySend(SystemStatus.Cellular())
+        }
+
+        awaitClose {
+            runCatching { tm.unregisterTelephonyCallback(cb) }
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // BATERIA
+    // ----------------------------------------------------------------
+
+    /**
+     * Bez uprawnień. ACTION_BATTERY_CHANGED to sticky broadcast, więc
+     * pierwszy odczyt przychodzi natychmiast po rejestracji, bez czekania
+     * na zmianę stanu.
+     */
+    private fun battery(): Flow<SystemStatus.Battery> = callbackFlow {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                if (intent == null) return
+
+                val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                val tenths = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+
+                trySend(
+                    SystemStatus.Battery(
+                        percent = if (level >= 0 && scale > 0) level * 100 / scale else -1,
+                        charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                            status == BatteryManager.BATTERY_STATUS_FULL,
+                        temperatureC = if (tenths == Int.MIN_VALUE) null else tenths / 10f,
+                    ),
+                )
+            }
+        }
+
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+
+        awaitClose {
+            runCatching { context.unregisterReceiver(receiver) }
+        }
+    }
+
+    private fun granted(name: String): Boolean =
+        ContextCompat.checkSelfPermission(context, name) == PackageManager.PERMISSION_GRANTED
+}

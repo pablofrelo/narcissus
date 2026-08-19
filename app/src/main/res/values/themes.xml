@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Motyw systemowy istnieje tylko po to, żeby ekran startowy nie mrugnął
+        na biało. Cała właściwa kolorystyka żyje w Compose (ui/theme/Palette.kt),
+        bo musi się dać przełączać w locie między nocą a dniem.
+    -->
+    <style name="Theme.Narcissus" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
