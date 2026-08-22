@@ -1,23 +1,36 @@
-# narcissus-2 — spójność odczytów
-
-Rozpakuj NA projekcie (wymaga wcześniejszej poprawki zbiorczej):
+# narcissus-2 — ekran nie gaśnie
 
     cd ~/android-dev/narcissus-2
-    tar xzf ~/Pobrane/narcissus-2-spojnosc.tar.gz --strip-components=1
+    tar xzf ~/Pobrane/narcissus-2-ekran.tar.gz --strip-components=1
     ./gradlew installDebug
 
-## Co się zmieniło
+## Co było
 
-- `MetricRow` zniknął. Został JEDEN wzór odczytu — `Readout` — używany
-  zarówno przez dużą cyfrę, jak i przez małe metryki. Etykieta nad
-  wartością, jednostka pod wartością, wszystko do prawej. Duży i małe
-  różnią się wyłącznie parametrem `valueSize`.
-- Duży odczyt dostał własny panel na pełną szerokość.
-- Wskaźniki GPS/GSM/PWR przeniesione do dolnego panelu, lewa kolumna,
-  rozłożone przez SpaceEvenly w tym samym rytmie co odczyty obok.
+W MainActivity siedział komentarz mówiący, że ekran nie gaśnie w trakcie
+przejazdu — ale kodu nigdy nie było. Komentarz opisywał zamiar, nie stan
+faktyczny.
 
-## Pliki
+## Co jest
 
-- `ui/components/Primitives.kt`
-- `ui/components/Indicators.kt`
-- `ui/TrackingScreen.kt`
+`FLAG_KEEP_SCREEN_ON` na oknie. Flaga działa wyłącznie na widocznym oknie,
+więc po przejściu aplikacji w tło telefon zasypia normalnie i nie trzeba jej
+samemu zdejmować.
+
+## Wariant oszczędny
+
+Teraz ekran świeci także w czuwaniu, gdy czekasz na fix przed startem.
+Jeśli okaże się to zbyt kosztowne dla baterii, można związać flagę ze
+stanem przejazdu — wtedy zamiast wywołania w onCreate wchodzi to do
+setContent, obok NarcissusTheme:
+
+    LaunchedEffect(state.active) {
+        if (state.active) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+## Plik
+
+- `MainActivity.kt`

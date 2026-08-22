@@ -2,31 +2,47 @@ package pl.yggdrasil.narcissus2
 
 import android.Manifest
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.core.view.WindowCompat
+import pl.yggdrasil.narcissus2.ui.ArchiveScreen
+import pl.yggdrasil.narcissus2.ui.ArchiveViewModel
 import pl.yggdrasil.narcissus2.ui.TrackingScreen
 import pl.yggdrasil.narcissus2.ui.TrackingViewModel
 import pl.yggdrasil.narcissus2.ui.theme.NarcissusTheme
+
+/** Dwa ekrany to za mało na bibliotekę nawigacyjną. Jedna zmienna wystarcza. */
+private enum class Screen { Tracking, Archive }
 
 class MainActivity : ComponentActivity() {
 
     private val permissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { /* Brak zgody obsługujemy w UI — wskaźnik GPS po prostu zostaje pusty. */ }
+    ) { /* Brak zgody obsługujemy w UI — wskaźnik GPS zostaje pusty. */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Ekran nie gaśnie w trakcie przejazdu — pełni rolę licznika
-        // przykręconego do kierownicy.
         WindowCompat.setDecorFitsSystemWindows(window, false)
+
+        // Ekran nie gaśnie, dopóki aplikacja jest na wierzchu.
+        //
+        // To jest licznik przykręcony do kierownicy, a nie aplikacja, do
+        // której się wraca — wygaszenie po minucie oznacza, że przez cały
+        // przejazd patrzysz na czarną szybę. Flaga działa tylko na widocznym
+        // oknie, więc po przejściu w tło telefon zasypia normalnie i nie
+        // trzeba jej samemu zdejmować.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         permissions.launch(
             arrayOf(
@@ -38,19 +54,54 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            val vm: TrackingViewModel = viewModel()
-            val state by vm.state.collectAsStateWithLifecycle()
+            val tracking: TrackingViewModel = viewModel()
+            val archive: ArchiveViewModel = viewModel()
+
+            val state by tracking.state.collectAsStateWithLifecycle()
+            val archiveState by archive.state.collectAsStateWithLifecycle()
+
+            var screen by remember { mutableStateOf(Screen.Tracking) }
 
             NarcissusTheme(day = state.day) {
-                TrackingScreen(
-                    state = state,
-                    onCommence = vm::commence,
-                    onTerminate = vm::terminate,
-                    onMode = vm::setMode,
-                    onToggleDay = vm::toggleDay,
-                    onTogglePosition = vm::togglePosition,
-                    onArchive = { /* TODO: ekran dziennika */ },
-                )
+                when (screen) {
+                    Screen.Tracking -> TrackingScreen(
+                        state = state,
+                        onCommence = tracking::commence,
+                        onTerminate = { tracking.terminate() },
+                        onMode = tracking::setMode,
+                        onToggleDay = tracking::toggleDay,
+                        onTogglePosition = tracking::togglePosition,
+                        onArchive = {
+                            // Odświeżamy przy wejściu, bo sesja mogła się
+                            // właśnie zapisać.
+                            archive.refresh()
+                            screen = Screen.Archive
+                        },
+                    )
+
+                    Screen.Archive -> {
+                        // Systemowy gest wstecz: z sesji do listy,
+                        // z listy do licznika.
+                        BackHandler {
+                            if (archiveState.opened != null) {
+                                archive.close()
+                            } else {
+                                screen = Screen.Tracking
+                            }
+                        }
+
+                        ArchiveScreen(
+                            state = archiveState,
+                            onOpen = archive::open,
+                            onClose = archive::close,
+                            onBack = { screen = Screen.Tracking },
+                            onAskDelete = archive::askDelete,
+                            onCancelDelete = archive::cancelDelete,
+                            onConfirmDelete = archive::confirmDelete,
+                            onSync = archive::runSync,
+                        )
+                    }
+                }
             }
         }
     }

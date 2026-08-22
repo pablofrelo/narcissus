@@ -7,17 +7,34 @@ import kotlin.math.max
  * Silnik pomiarowy. Czysta logika, zero Androida poza klasą [Location] —
  * dzięki temu da się to przetestować bez telefonu.
  *
- * Cała trudność licznika GPS siedzi w jednym miejscu: sygnał szumi, a
- * naiwne sumowanie odległości między kolejnymi fixami nabija kilometry
- * podczas postoju na światłach. Filtrujemy więc na trzech poziomach:
- * jakość fixa, wiarygodność przeskoku, minimalne przemieszczenie.
+ * Cała trudność licznika GPS siedzi w jednym miejscu: sygnał szumi, a naiwne
+ * sumowanie odległości między kolejnymi fixami nabija kilometry na postoju.
+ * Filtrujemy więc na trzech poziomach: jakość fixa, wiarygodność przeskoku,
+ * odejście od punktu zaczepienia.
  */
 class TelemetryEngine(
     private val mode: ActivityMode,
 ) {
     private var startedAt = 0L
+
+    /** Ostatni fix — służy do liczenia prędkości między pomiarami. */
     private var lastFix: Location? = null
     private var lastFixAt = 0L
+
+    /**
+     * Punkt zaczepienia: ostatnia pozycja, od której zatwierdziliśmy dystans.
+     *
+     * TO JEST SEDNO. Próg szumu (kilka metrów) NIE może być sprawdzany na
+     * pojedynczym fixie, bo przy pomiarach co sekundę marsz daje przesunięcie
+     * rzędu półtora metra i nic nigdy nie przechodzi — licznik stoi na zerze
+     * przez cały spacer. Zamiast tego przesunięcie kumuluje się względem
+     * zaczepienia i dopiero po przekroczeniu szumu trafia do dystansu,
+     * a zaczepienie przeskakuje na bieżącą pozycję.
+     *
+     * Efekt uboczny jest pożądany: dryf na postoju krąży wokół zaczepienia
+     * i nigdy się od niego nie oddala, więc nadal nic nie nabija.
+     */
+    private var anchor: Location? = null
 
     private var distanceM = 0.0
     private var movingMs = 0L
@@ -36,6 +53,7 @@ class TelemetryEngine(
         startedAt = nowMs
         lastFix = null
         lastFixAt = 0L
+        anchor = null
         distanceM = 0.0
         movingMs = 0L
         maxSpeedMps = 0f
@@ -55,10 +73,6 @@ class TelemetryEngine(
         steps = (total - base).coerceAtLeast(0)
     }
 
-    /**
-     * @return telemetria po uwzględnieniu fixa. Fix odrzucony też zwraca
-     *         stan — licznik POMIARY ma pokazywać, ile odpadło.
-     */
     fun onLocation(fix: Location, nowMs: Long): Telemetry {
         val warming = nowMs - startedAt < warmupMs
         val accuracy = if (fix.hasAccuracy()) fix.accuracy else Float.MAX_VALUE
@@ -75,13 +89,14 @@ class TelemetryEngine(
         if (previous == null || dtMs <= 0) {
             lastFix = fix
             lastFixAt = nowMs
+            if (!warming) anchor = fix
             accepted++
             return snapshot(nowMs, accuracy, warming, moving = false)
         }
 
-        val delta = previous.distanceTo(fix).toDouble()
+        val step = previous.distanceTo(fix).toDouble()
         val dtS = dtMs / 1000.0
-        val impliedSpeed = (delta / dtS).toFloat()
+        val impliedSpeed = (step / dtS).toFloat()
 
         // --- poziom 2: wiarygodność przeskoku ---
         // Przeskok szybszy niż fizycznie możliwy dla trybu to artefakt,
@@ -89,37 +104,47 @@ class TelemetryEngine(
         if (impliedSpeed > mode.thresholds.maxSpeedMps) {
             rejected++
             // Fix zapamiętujemy mimo odrzucenia — inaczej następny pomiar
-            // policzy dystans względem pozycji sprzed kilku minut.
+            // policzyłby dystans względem pozycji sprzed kilku minut.
             lastFix = fix
             lastFixAt = nowMs
+            anchor = fix
             return snapshot(nowMs, accuracy, warming, moving = false)
         }
 
-        // --- poziom 3: minimalne przemieszczenie ---
-        // Dopóki przesunięcie mieści się w błędzie pomiaru, to jest szum,
-        // nie ruch. Bez tego progu licznik rośnie na postoju.
-        val floor = max(accuracy * 0.5, 2.0)
-        val moving = impliedSpeed >= mode.thresholds.minSpeedMps && delta > floor
-
-        if (moving && !warming) {
-            distanceM += delta
-            movingMs += dtMs
-            if (impliedSpeed > maxSpeedMps) maxSpeedMps = impliedSpeed
-        }
+        // Prędkość chwilowa: wolimy tę z odbiornika, bo pochodzi z dopplera
+        // i jest wyraźnie stabilniejsza niż różniczkowanie pozycji.
+        val speed = if (fix.hasSpeed() && fix.speed > 0f) fix.speed else impliedSpeed
+        val moving = speed >= mode.thresholds.minSpeedMps
 
         lastFix = fix
         lastFixAt = nowMs
         accepted++
 
-        return snapshot(
-            nowMs = nowMs,
-            accuracy = accuracy,
-            warming = warming,
-            moving = moving,
-            // Prędkość chwilowa: wolimy tę z odbiornika, bo pochodzi
-            // z dopplera i jest dokładniejsza niż różniczkowanie pozycji.
-            speed = if (fix.hasSpeed()) fix.speed else impliedSpeed,
-        )
+        if (warming) {
+            anchor = fix
+            return snapshot(nowMs, accuracy, warming = true, moving = false)
+        }
+
+        if (moving) {
+            movingMs += dtMs
+            if (speed > maxSpeedMps) maxSpeedMps = speed
+        }
+
+        // --- poziom 3: odejście od zaczepienia ---
+        val base = anchor
+        if (base == null) {
+            anchor = fix
+        } else {
+            val fromAnchor = base.distanceTo(fix).toDouble()
+            val floor = max(accuracy * 0.5, MIN_FLOOR_M)
+
+            if (fromAnchor > floor) {
+                distanceM += fromAnchor
+                anchor = fix
+            }
+        }
+
+        return snapshot(nowMs, accuracy, warming = false, moving = moving, speed = speed)
     }
 
     /** Wywoływane co sekundę, żeby czas leciał także bez nowego fixa. */
@@ -152,5 +177,17 @@ class TelemetryEngine(
             rawAltitudeM = null,
             ascentM = null,
         )
+    }
+
+    companion object {
+        /**
+         * Dolna granica progu szumu.
+         *
+         * Przy bardzo dobrym fixie (dokładność 2 m) połowa dokładności dałaby
+         * metr, co jest poniżej realnego rozrzutu odbiornika. Trzy metry to
+         * kompromis: marsz przekracza je w dwie sekundy, a dryf na postoju
+         * rzadko wychodzi tak daleko od zaczepienia.
+         */
+        private const val MIN_FLOOR_M = 3.0
     }
 }

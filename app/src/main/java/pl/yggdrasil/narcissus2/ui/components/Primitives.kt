@@ -9,17 +9,27 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import pl.yggdrasil.narcissus2.domain.Metric
 import pl.yggdrasil.narcissus2.domain.Telemetry
 import pl.yggdrasil.narcissus2.ui.theme.Grid
@@ -114,22 +124,78 @@ fun Readout(
     }
 }
 
-/** Przycisk komendy: pusty prostokąt, kolor niesie znaczenie. */
+/**
+ * Przycisk komendy wymagający PRZYTRZYMANIA.
+ *
+ * Zwykłe dotknięcie odpada: telefon jedzie w uchwycie na kierownicy, a
+ * przypadkowe muśnięcie kończące przejazd w połowie trasy to strata, której
+ * nie da się odzyskać. Dwie sekundy to za długo na przypadek i za krótko,
+ * żeby denerwowało.
+ *
+ * Postęp wypełnia przycisk od lewej. Bez tego przytrzymanie jest irytujące,
+ * bo nie wiadomo, ile jeszcze — a puszczenie sekundę za wcześnie nie daje
+ * żadnej informacji zwrotnej.
+ */
 @Composable
 fun Command(
     text: String,
     color: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    holdMs: Long = 2_000L,
 ) {
+    val p = Theme.palette
+    var progress by remember { mutableFloatStateOf(0f) }
+    var pressed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pressed) {
+        if (!pressed) {
+            // Odjazd do zera jest szybszy niż narastanie — puszczenie
+            // przycisku ma być natychmiast widoczne.
+            while (progress > 0f) {
+                progress = (progress - 0.08f).coerceAtLeast(0f)
+                delay(16)
+            }
+            return@LaunchedEffect
+        }
+
+        val startedAt = withFrameMillis { it }
+        while (progress < 1f) {
+            val elapsed = withFrameMillis { it } - startedAt
+            progress = (elapsed.toFloat() / holdMs).coerceIn(0f, 1f)
+        }
+
+        pressed = false
+        progress = 0f
+        onClick()
+    }
+
     Box(
         modifier
             .fillMaxWidth()
             .height(66.dp)
             .border(1.dp, color)
-            .tap(onClick),
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        pressed = true
+                        // Czeka na puszczenie albo anulowanie gestu.
+                        tryAwaitRelease()
+                        pressed = false
+                    },
+                )
+            },
         contentAlignment = Alignment.Center,
     ) {
+        // Wypełnienie postępu pod tekstem.
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(progress)
+                .background(color.copy(alpha = 0.22f))
+                .align(Alignment.CenterStart),
+        )
+
         Text(
             text = text,
             color = color,
@@ -137,6 +203,17 @@ fun Command(
             fontSize = Grid.COMMAND.sp,
             letterSpacing = 7.sp,
         )
+
+        if (progress > 0.02f) {
+            Label(
+                "PRZYTRZYMAJ",
+                color = p.dim,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 6.dp),
+                softWrap = false,
+            )
+        }
     }
 }
 

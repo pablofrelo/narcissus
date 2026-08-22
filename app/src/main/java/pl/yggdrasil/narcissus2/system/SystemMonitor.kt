@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.onStart
 
 /**
  * Trzy niezależne źródła scalone w jeden strumień.
@@ -29,8 +30,22 @@ import kotlinx.coroutines.flow.conflate
  */
 class SystemMonitor(private val context: Context) {
 
+    /**
+     * UWAGA NA combine: emituje pierwszą wartość dopiero wtedy, gdy KAŻDE
+     * ze źródeł coś wypuści.
+     *
+     * GNSS odzywa się dopiero, gdy odbiornik zacznie raportować satelity —
+     * po zimnym starcie potrafi to potrwać kilkanaście sekund. Bez wartości
+     * startowych cały strumień milczy do tego momentu i wygaszone są też
+     * bateria z zasięgiem, które dane mają od razu. Stąd onStart na każdym
+     * źródle: pusty stan jest lepszy niż brak stanu.
+     */
     fun status(): Flow<SystemStatus> =
-        combine(gnss(), cellular(), battery()) { g, c, b ->
+        combine(
+            gnss().onStart { emit(SystemStatus.Gnss()) },
+            cellular().onStart { emit(SystemStatus.Cellular()) },
+            battery().onStart { emit(SystemStatus.Battery()) },
+        ) { g, c, b ->
             SystemStatus(g, c, b)
         }.conflate()
 
@@ -103,23 +118,30 @@ class SystemMonitor(private val context: Context) {
             return@callbackFlow
         }
 
-        val cb = object : TelephonyCallback(), TelephonyCallback.SignalStrengthsListener {
-            override fun onSignalStrengthsChanged(s: SignalStrength) {
-                val cells: List<CellSignalStrength> = s.cellSignalStrengths
-                val best = cells.maxByOrNull { it.level }
+        fun push(s: SignalStrength) {
+            val cells: List<CellSignalStrength> = s.cellSignalStrengths
+            val best = cells.maxByOrNull { it.level }
 
-                trySend(
-                    SystemStatus.Cellular(
-                        level = best?.level ?: -1,
-                        dbm = best?.dbm,
-                        offline = cells.isEmpty(),
-                    ),
-                )
-            }
+            trySend(
+                SystemStatus.Cellular(
+                    level = best?.level ?: -1,
+                    dbm = best?.dbm,
+                    offline = cells.isEmpty(),
+                ),
+            )
+        }
+
+        val cb = object : TelephonyCallback(), TelephonyCallback.SignalStrengthsListener {
+            override fun onSignalStrengthsChanged(s: SignalStrength) = push(s)
         }
 
         try {
             tm.registerTelephonyCallback(ContextCompat.getMainExecutor(context), cb)
+
+            // Callback odzywa się przy ZMIANIE siły sygnału. Gdy zasięg stoi
+            // w miejscu, pierwsza emisja potrafi nie przyjść przez długi czas
+            // — więc bierzemy stan bieżący od razu przy rejestracji.
+            tm.signalStrength?.let(::push)
         } catch (e: SecurityException) {
             trySend(SystemStatus.Cellular())
         }

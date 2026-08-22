@@ -14,9 +14,12 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import pl.yggdrasil.narcissus2.data.SessionStore
 import pl.yggdrasil.narcissus2.domain.ActivityMode
+import pl.yggdrasil.narcissus2.domain.Session
 import pl.yggdrasil.narcissus2.domain.Telemetry
 import pl.yggdrasil.narcissus2.domain.TelemetryEngine
+import pl.yggdrasil.narcissus2.domain.TrackPoint
 import pl.yggdrasil.narcissus2.system.LocationSource
 import pl.yggdrasil.narcissus2.system.StepSource
 import pl.yggdrasil.narcissus2.system.SystemMonitor
@@ -32,6 +35,8 @@ data class TrackingUiState(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val error: String? = null,
+    /** Krótki komunikat po zakończeniu sesji — znika sam. */
+    val notice: String? = null,
 ) {
     /** Odbiornik ma pozycję i dokładność mieszczącą się w progu trybu. */
     val ready: Boolean
@@ -44,20 +49,19 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
     private val monitor = SystemMonitor(app)
     private val locations = LocationSource(app)
     private val stepper = StepSource(app)
+    private val store = SessionStore(app)
 
     private var engine: TelemetryEngine? = null
     private var sessionJobs = mutableListOf<Job>()
 
+    private var sessionId: String? = null
+    private var sessionStartedAt = 0L
+    private var track: SessionStore.TrackWriter? = null
+
     /**
      * Odbiornik pracuje ZAWSZE, gdy aplikacja jest otwarta — w czuwaniu
-     * tylko rzadziej.
-     *
-     * Powód: zimny start GNSS to kilkadziesiąt sekund do minuty. Gdyby
-     * odbiornik ruszał dopiero po naciśnięciu START, pierwsze pół kilometra
-     * przejazdu byłoby nieznane. Licznik ma być gotowy, zanim wsiądziesz.
-     *
-     * Kosztem jest bateria, dlatego w czuwaniu pytamy co cztery sekundy —
-     * to wystarcza, żeby utrzymać fix, i jest wyraźnie tańsze niż sekunda.
+     * tylko rzadziej. Zimny start GNSS to nawet minuta, więc czekanie
+     * z tym do naciśnięcia START oznaczałoby utratę pierwszego kilometra.
      */
     private val interval = MutableStateFlow(STANDBY_INTERVAL_MS)
 
@@ -65,13 +69,10 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<TrackingUiState> = _state.asStateFlow()
 
     init {
-        // Wskaźniki podsystemów — niezależne od przejazdu.
         viewModelScope.launch {
             monitor.status().collect { s -> _state.update { it.copy(system = s) } }
         }
 
-        // Jeden strumień pozycji na całe życie ekranu. Zmiana interwału
-        // restartuje go bez gubienia ciągłości logiki wyżej.
         @OptIn(ExperimentalCoroutinesApi::class)
         viewModelScope.launch {
             interval
@@ -85,9 +86,7 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
         val e = engine
 
         if (e == null) {
-            // Czuwanie: karmimy tylko wskaźniki i panel pozycji. Dokładność
-            // trafia do telemetrii, żeby linia stanu mogła pokazać GOTOWOŚĆ
-            // z konkretną liczbą metrów zamiast samego napisu.
+            // Czuwanie: karmimy tylko wskaźniki i panel pozycji.
             _state.update {
                 it.copy(
                     telemetry = it.telemetry.copy(
@@ -101,6 +100,20 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         val telemetry = e.onLocation(fix, System.currentTimeMillis())
+
+        // Ślad piszemy przyrostowo — pad baterii zabiera ostatnie sekundy,
+        // a nie całą trasę.
+        track?.append(
+            TrackPoint(
+                timestamp = fix.time,
+                latitude = fix.latitude,
+                longitude = fix.longitude,
+                accuracyM = if (fix.hasAccuracy()) fix.accuracy else 0f,
+                speedMps = if (fix.hasSpeed()) fix.speed else 0f,
+                altitudeM = if (fix.hasAltitude()) fix.altitude else null,
+            ),
+        )
+
         _state.update {
             it.copy(
                 telemetry = telemetry,
@@ -119,16 +132,24 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
     fun togglePosition() = _state.update { it.copy(positionVisible = !it.positionVisible) }
 
+    fun dismissNotice() = _state.update { it.copy(notice = null) }
+
     fun commence() {
         if (_state.value.active) return
 
         val mode = _state.value.mode
-        engine = TelemetryEngine(mode).also { it.start(System.currentTimeMillis()) }
+        val now = System.currentTimeMillis()
 
-        // Przejazd potrzebuje gęstszych pomiarów niż czuwanie.
+        engine = TelemetryEngine(mode).also { it.start(now) }
+        sessionStartedAt = now
+        sessionId = java.util.UUID.randomUUID().toString()
+        track = sessionId?.let { store.openTrack(it) }
+
         interval.value = ACTIVE_INTERVAL_MS
 
-        _state.update { it.copy(active = true, telemetry = Telemetry(), error = null) }
+        _state.update {
+            it.copy(active = true, telemetry = Telemetry(), error = null, notice = null)
+        }
 
         if (mode.usesStepSensor) {
             sessionJobs += viewModelScope.launch {
@@ -136,8 +157,6 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
 
-        // Zegar tyka niezależnie od fixów — inaczej CZAS stoi w miejscu,
-        // dopóki nie przyjdzie pierwszy pomiar, co wygląda na zawieszenie.
         sessionJobs += viewModelScope.launch {
             while (true) {
                 delay(1_000)
@@ -149,25 +168,88 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun terminate() {
+    /**
+     * Kończy sesję: zapisuje, potem ZERUJE ekran.
+     *
+     * Zostawianie liczb po STOP wyglądało jak zawieszenie — licznik pokazywał
+     * dane, a linia stanu mówiła GOTOWOŚĆ. Podsumowanie należy do dziennika,
+     * nie do ekranu roboczego. Tu zostaje krótki komunikat i tyle.
+     */
+    fun terminate(markAsTest: Boolean = false) {
+        if (!_state.value.active) return
+
         sessionJobs.forEach { it.cancel() }
         sessionJobs.clear()
-        engine = null
 
-        // Wracamy do czuwania, a nie do wyłączenia — po zatrzymaniu licznik
-        // nadal ma wiedzieć, gdzie jest, na wypadek szybkiego restartu.
+        val telemetry = _state.value.telemetry
+        val mode = _state.value.mode
+        val id = sessionId
+        val points = track?.close() ?: 0
+        track = null
+        engine = null
+        sessionId = null
+
         interval.value = STANDBY_INTERVAL_MS
 
-        _state.update { it.copy(active = false) }
+        // Zerujemy natychmiast, nie czekając na zapis — ekran ma reagować
+        // na dotknięcie, a nie na dysk.
+        _state.update {
+            it.copy(
+                active = false,
+                telemetry = Telemetry(lastAccuracyM = telemetry.lastAccuracyM),
+                notice = null,
+            )
+        }
+
+        if (id == null) return
+
+        // Sesje bez ruchu nie zaśmiecają dziennika. Ślad i tak trzeba usunąć.
+        if (telemetry.distanceM < MIN_SAVED_DISTANCE_M) {
+            viewModelScope.launch {
+                store.trackFile(id).delete()
+                _state.update { it.copy(notice = "SESJA ODRZUCONA - BRAK RUCHU") }
+            }
+            return
+        }
+
+        val session = Session(
+            id = id,
+            mode = mode,
+            startedAt = sessionStartedAt,
+            endedAt = System.currentTimeMillis(),
+            distanceM = telemetry.distanceM,
+            elapsedMs = telemetry.elapsedMs,
+            movingMs = telemetry.movingMs,
+            avgMovingSpeedMps = telemetry.avgMovingSpeedMps,
+            maxSpeedMps = telemetry.maxSpeedMps,
+            totalSteps = telemetry.totalSteps,
+            acceptedFixes = telemetry.acceptedFixes,
+            rejectedFixes = telemetry.rejectedFixes,
+            pointCount = points,
+            test = markAsTest,
+        )
+
+        viewModelScope.launch {
+            store.save(session)
+            _state.update {
+                it.copy(notice = "ZAPISANO %.2f KM".format(session.distanceM / 1000.0))
+            }
+            delay(4_000)
+            _state.update { it.copy(notice = null) }
+        }
     }
 
     override fun onCleared() {
         super.onCleared()
+        // Nie gubimy sesji przy zamknięciu — zapisuje się tak samo jak STOP.
         terminate()
     }
 
     companion object {
         private const val STANDBY_INTERVAL_MS = 4_000L
         private const val ACTIVE_INTERVAL_MS = 1_000L
+
+        /** Poniżej tego dystansu sesja nie trafia do dziennika. */
+        private const val MIN_SAVED_DISTANCE_M = 50.0
     }
 }

@@ -93,6 +93,10 @@ fun TrackingScreen(
 
         StatusLine(state)
 
+        state.notice?.let { notice ->
+            Label(notice, color = p.amber, softWrap = false)
+        }
+
         ModeSelector(
             labels = ActivityMode.entries.map { it.label },
             selectedIndex = state.mode.ordinal,
