@@ -13,6 +13,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import pl.yggdrasil.narcissus2.ui.ArchiveScreen
@@ -62,6 +66,22 @@ class MainActivity : ComponentActivity() {
 
             var screen by remember { mutableStateOf(Screen.Tracking) }
 
+            // Kontroler musi wiedzieć, czy patrzysz na ekran. Bez aktywnej
+            // sesji i bez widocznego okna nie ma powodu trzymać włączonego
+            // odbiornika GNSS — to najdroższy element całego licznika.
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    when (event) {
+                        Lifecycle.Event.ON_START -> tracking.setForeground(true)
+                        Lifecycle.Event.ON_STOP -> tracking.setForeground(false)
+                        else -> Unit
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+
             NarcissusTheme(day = state.day) {
                 when (screen) {
                     Screen.Tracking -> TrackingScreen(
@@ -99,6 +119,7 @@ class MainActivity : ComponentActivity() {
                             onCancelDelete = archive::cancelDelete,
                             onConfirmDelete = archive::confirmDelete,
                             onSync = archive::runSync,
+                            onDeleteTests = archive::deleteAllTest,
                         )
                     }
                 }

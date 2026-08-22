@@ -1,0 +1,11 @@
+services:
+  narcissus-sync:
+    build: .
+    container_name: narcissus-sync
+    restart: unless-stopped
+    # Nasłuch tylko na interfejsie WireGuard — mesh jest granicą zaufania,
+    # a w protokole nie ma żadnego uwierzytelniania.
+    ports:
+      - "10.8.0.1:8765:8765"
+    volumes:
+      - ./data:/data

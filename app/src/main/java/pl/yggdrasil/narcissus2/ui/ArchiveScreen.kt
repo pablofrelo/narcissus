@@ -46,6 +46,7 @@ fun ArchiveScreen(
     onCancelDelete: () -> Unit,
     onConfirmDelete: (String) -> Unit,
     onSync: () -> Unit,
+    onDeleteTests: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = Theme.palette
@@ -98,7 +99,14 @@ fun ArchiveScreen(
         }
 
         if (opened == null) {
-            SessionList(state, onOpen, onAskDelete, onCancelDelete, onConfirmDelete)
+            SessionList(
+                state,
+                onOpen,
+                onAskDelete,
+                onCancelDelete,
+                onConfirmDelete,
+                onDeleteTests,
+            )
         } else {
             SessionDetail(state, opened, onAskDelete, onCancelDelete, onConfirmDelete)
         }
@@ -112,6 +120,7 @@ private fun ColumnScope.SessionList(
     onAskDelete: (String) -> Unit,
     onCancelDelete: () -> Unit,
     onConfirmDelete: (String) -> Unit,
+    onDeleteTests: () -> Unit,
 ) {
     val p = Theme.palette
 
@@ -129,11 +138,29 @@ private fun ColumnScope.SessionList(
 
     // Nagłówek zbiorczy — suma tego, co w ogóle jest w dzienniku.
     val totalKm = state.sessions.sumOf { it.distanceM } / 1000.0
-    Label(
-        "%d SESJI / %.1f KM".format(state.sessions.size, totalKm),
-        color = p.phosphor,
-        softWrap = false,
-    )
+    val tests = state.sessions.count { it.test }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Label(
+            "%d SESJI / %.1f KM".format(state.sessions.size, totalKm),
+            color = p.phosphor,
+            softWrap = false,
+        )
+
+        // Pojawia się tylko wtedy, gdy jest co sprzątać — pusty przycisk
+        // do kasowania niczego byłby tylko okazją do pomyłki.
+        if (tests > 0) {
+            Label(
+                "[USUŃ $tests TEST.]",
+                color = p.amber,
+                softWrap = false,
+                modifier = Modifier.tap(onDeleteTests),
+            )
+        }
+    }
 
     LazyColumn(
         Modifier.weight(1f),

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android od API 28 blokuje ruch nieszyfrowany. Serwer synchronizacji stoi
+    na gołym HTTP i tak ma zostać: jest osiągalny wyłącznie w meshu
+    WireGuard, który sam szyfruje transport. Dokładanie TLS-a wewnątrz
+    tunelu byłoby szyfrowaniem szyfrowanego.
+
+    Wyjątek dotyczy JEDNEGO adresu. Reszta świata nadal wymaga HTTPS —
+    gdyby kiedyś doszło pobieranie czegokolwiek z internetu, blokada działa.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.8.0.1</domain>
+    </domain-config>
+
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

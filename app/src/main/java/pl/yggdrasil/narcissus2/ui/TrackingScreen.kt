@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pl.yggdrasil.narcissus2.domain.ActivityMode
+import pl.yggdrasil.narcissus2.ui.components.BurnInShift
 import pl.yggdrasil.narcissus2.ui.components.Command
 import pl.yggdrasil.narcissus2.ui.components.IndicatorRail
 import pl.yggdrasil.narcissus2.ui.components.Label
@@ -26,6 +27,8 @@ import pl.yggdrasil.narcissus2.ui.components.ModeSelector
 import pl.yggdrasil.narcissus2.ui.components.Panel
 import pl.yggdrasil.narcissus2.ui.components.PositionPanel
 import pl.yggdrasil.narcissus2.ui.components.Readout
+import pl.yggdrasil.narcissus2.ui.components.burnInPadding
+import pl.yggdrasil.narcissus2.ui.components.rememberBurnInShift
 import pl.yggdrasil.narcissus2.ui.components.tap
 import pl.yggdrasil.narcissus2.ui.theme.Grid
 import pl.yggdrasil.narcissus2.ui.theme.Theme
@@ -56,12 +59,16 @@ fun TrackingScreen(
     val p = Theme.palette
     val metrics = state.mode.metrics
 
+    // Ekran świeci bez przerwy, a układ stoi w miejscu — na AMOLED-zie to
+    // przepis na wypalenie etykiet. Treść powoli wędruje po matrycy.
+    val shift: BurnInShift = rememberBurnInShift()
+
     Column(
         modifier
             .fillMaxSize()
             .background(p.void)
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .burnInPadding(horizontal = 12.dp, vertical = 8.dp, shift = shift),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
 
