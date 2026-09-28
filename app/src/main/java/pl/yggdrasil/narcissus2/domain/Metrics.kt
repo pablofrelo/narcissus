@@ -21,7 +21,13 @@ data class Telemetry(
     val elapsedMs: Long = 0L,
     val movingMs: Long = 0L,
     val speedMps: Float = 0f,
+    /** Prędkość wygładzona z ostatnich sekund — źródło tempa na ekranie. */
+    val paceSpeedMps: Float = 0f,
     val avgMovingSpeedMps: Float = 0f,
+    /** Numer bieżącego kilometra, liczony od 1. */
+    val lapIndex: Int = 1,
+    /** Średnia prędkość w bieżącym kilometrze (czas ruchu). */
+    val lapSpeedMps: Float = 0f,
     val maxSpeedMps: Float = 0f,
     val totalSteps: Int = 0,
     val cadenceSpm: Int? = null,
@@ -46,6 +52,8 @@ data class Metric(
     val id: String,
     val label: String,
     val unit: String,
+    /** Etykieta zależna od stanu, np. numer kilometra. Null = stała [label]. */
+    val labelOf: ((Telemetry) -> String)? = null,
     val read: (Telemetry) -> String,
 )
 
@@ -68,10 +76,19 @@ object Metrics {
     }
 
     val Pace = Metric("pace", "TEMPO", "MIN/KM") {
-        formatPace(it.speedMps)
+        formatPace(it.paceSpeedMps)
     }
 
-    val AvgPace = Metric("avgpace", "ŚR. TEMPO", "MIN/KM") {
+    val LapPace = Metric(
+        id = "lappace",
+        label = "TEMPO KM",
+        unit = "MIN/KM",
+        labelOf = { "TEMPO KM ${it.lapIndex}" },
+    ) {
+        formatPace(it.lapSpeedMps)
+    }
+
+    val AvgPace = Metric("avgpace", "TEMPO ŚREDNIE", "MIN/KM") {
         formatPace(it.avgMovingSpeedMps)
     }
 
@@ -87,8 +104,8 @@ object Metrics {
         it.totalSteps.toString()
     }
 
-    val Cadence = Metric("cad", "KADENCJA", "SPM") {
-        (it.cadenceSpm ?: 0).toString()
+    val Cadence = Metric("cad", "KADENCJA", "KR/MIN") { t ->
+        t.cadenceSpm?.toString() ?: "---"
     }
 
     val Fixes = Metric("fix", "POMIARY", "OK/REJ") {
@@ -133,13 +150,20 @@ enum class ActivityMode(
     val label: String,
     val usesStepSensor: Boolean,
     val thresholds: Thresholds,
-    /** Kolejność ma znaczenie: pierwsza metryka trafia na duży wyświetlacz. */
+    /**
+     * Czy pierwsza metryka idzie na duży wyświetlacz. Rower tak — telefon
+     * wisi na kierownicy, pół metra od oczu. W biegu telefon jest w ręce,
+     * więc wszystkie odczyty mają jeden, średni rozmiar.
+     */
+    val hero: Boolean,
+    /** Kolejność ma znaczenie: przy [hero] pierwsza metryka trafia na duży wyświetlacz. */
     val metrics: List<Metric>,
 ) {
     Bike(
         label = "ROWER",
         usesStepSensor = false,
         thresholds = Thresholds(maxAccuracyM = 25f, minSpeedMps = 1.0f, maxSpeedMps = 30f),
+        hero = true,
         metrics = listOf(
             Metrics.Speed,
             Metrics.Distance,
@@ -154,13 +178,12 @@ enum class ActivityMode(
         label = "BIEG",
         usesStepSensor = true,
         thresholds = Thresholds(maxAccuracyM = 20f, minSpeedMps = 0.8f, maxSpeedMps = 8f),
+        hero = false,
         metrics = listOf(
-            Metrics.Pace,
             Metrics.Distance,
-            Metrics.Elapsed,
+            Metrics.LapPace,
             Metrics.AvgPace,
             Metrics.Cadence,
-            Metrics.Steps,
         ),
     ),
 
@@ -168,6 +191,7 @@ enum class ActivityMode(
         label = "PIESZO",
         usesStepSensor = true,
         thresholds = Thresholds(maxAccuracyM = 15f, minSpeedMps = 0.4f, maxSpeedMps = 3f),
+        hero = true,
         metrics = listOf(
             Metrics.Pace,
             Metrics.Distance,
@@ -179,9 +203,9 @@ enum class ActivityMode(
     ),
 }
 
-/** Tempo mm:ss na kilometr. */
+/** Tempo mm:ss na kilometr. Wolniej niż 30:00 to już nie ruch, tylko szum. */
 private fun formatPace(speedMps: Float): String {
-    if (speedMps <= 0f) return "--:--"
+    if (speedMps <= 1000f / (30 * 60)) return "--:--"
     val total = (1000f / speedMps).toInt()
     return "%d:%02d".format(total / 60, total % 60)
 }

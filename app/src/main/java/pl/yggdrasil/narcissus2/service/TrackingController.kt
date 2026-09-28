@@ -180,7 +180,9 @@ class TrackingController(private val context: Context) {
 
         if (_state.value.mode.usesStepSensor) {
             sessionJobs += scope.launch {
-                stepper.steps().collect { total -> engine?.onStepCounter(total) }
+                stepper.steps().collect { total ->
+                    engine?.onStepCounter(total, System.currentTimeMillis())
+                }
             }
         }
 
@@ -189,7 +191,14 @@ class TrackingController(private val context: Context) {
                 delay(1_000)
                 val t = engine?.tick(System.currentTimeMillis()) ?: break
                 _state.update { s ->
-                    s.copy(telemetry = s.telemetry.copy(elapsedMs = t.elapsedMs))
+                    // Kroki i kadencja lecą także bez nowego fixa, np. w tunelu.
+                    s.copy(
+                        telemetry = s.telemetry.copy(
+                            elapsedMs = t.elapsedMs,
+                            totalSteps = t.totalSteps,
+                            cadenceSpm = t.cadenceSpm,
+                        ),
+                    )
                 }
             }
         }

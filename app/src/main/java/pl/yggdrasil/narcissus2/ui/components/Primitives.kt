@@ -35,6 +35,7 @@ import pl.yggdrasil.narcissus2.domain.Telemetry
 import pl.yggdrasil.narcissus2.ui.theme.Grid
 import pl.yggdrasil.narcissus2.ui.theme.Theme
 import pl.yggdrasil.narcissus2.ui.theme.Type
+import pl.yggdrasil.narcissus2.ui.theme.gridSp
 
 /** Klik bez ripple'a. Ripple w tej estetyce wygląda jak wpadka. */
 @Composable
@@ -60,7 +61,7 @@ fun Label(
         modifier = modifier,
         color = color,
         fontFamily = Type.Chrome,
-        fontSize = size.sp,
+        fontSize = gridSp(size),
         letterSpacing = 1.sp,
         softWrap = softWrap,
         maxLines = if (softWrap) Int.MAX_VALUE else 1,
@@ -108,13 +109,13 @@ fun Readout(
     val p = Theme.palette
 
     Column(modifier, horizontalAlignment = Alignment.End) {
-        Label(metric.label, color = p.phosphor, softWrap = false)
+        Label(metric.labelOf?.invoke(telemetry) ?: metric.label, color = p.phosphor, softWrap = false)
 
         Text(
             text = metric.read(telemetry),
             color = p.readout,
             fontFamily = Type.Readout,
-            fontSize = valueSize.sp,
+            fontSize = gridSp(valueSize),
             maxLines = 1,
         )
 
@@ -200,7 +201,7 @@ fun Command(
             text = text,
             color = color,
             fontFamily = Type.Chrome,
-            fontSize = Grid.COMMAND.sp,
+            fontSize = gridSp(Grid.COMMAND),
             letterSpacing = 7.sp,
         )
 

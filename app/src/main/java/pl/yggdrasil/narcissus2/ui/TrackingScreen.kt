@@ -121,12 +121,16 @@ fun TrackingScreen(
         )
 
         // --- panel górny: sam duży odczyt, pełna szerokość ---
-        Panel(alignment = Alignment.End) {
-            Readout(
-                metric = metrics[0],
-                telemetry = state.telemetry,
-                valueSize = Grid.READOUT,
-            )
+        // Tylko w trybach z [ActivityMode.hero]. W biegu telefon jest w ręce,
+        // więc wszystkie odczyty idą do jednej kolumny, jednym rozmiarem.
+        if (state.mode.hero) {
+            Panel(alignment = Alignment.End) {
+                Readout(
+                    metric = metrics[0],
+                    telemetry = state.telemetry,
+                    valueSize = Grid.READOUT,
+                )
+            }
         }
 
         // --- panel dolny: wskaźniki po lewej, odczyty po prawej ---
@@ -150,7 +154,7 @@ fun TrackingScreen(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    metrics.drop(1).forEach { metric ->
+                    metrics.drop(if (state.mode.hero) 1 else 0).forEach { metric ->
                         Readout(metric, state.telemetry)
                     }
                 }

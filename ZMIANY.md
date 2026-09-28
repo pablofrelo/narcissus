@@ -1,44 +1,62 @@
-# narcissus-2 — martwy strumień pozycji
+# narcissus-2 — ekran biegu i skalowanie
 
     cd ~/android-dev/narcissus-2
-    tar xzf ~/Pobrane/narcissus-2-fix-fix.tar.gz --strip-components=1
-    git diff          # <-- ZERKNIJ, te pliki są nadpisane w całości
+    git add -A && git commit -m "stan przed ekranem biegu"   # najpierw zapisz to, co masz
+    tar xzf ~/Pobrane/narcissus-2-bieg.tar.gz --strip-components=1
+    git diff          # <-- zerknij, co się zmieniło
     ./gradlew installDebug
 
-## Co zepsułem
+Nie budowałem tego u siebie (brak dostępu do repozytoriów Androida),
+więc jeśli kompilator coś zgłosi — wklej, poprawię.
 
-Dwie rzeczy, obie moje.
+## Ekran BIEG
 
-### catch KOŃCZY strumień
+Cztery odczyty jednym rozmiarem, bez dużej cyfry — telefon w ręce,
+nie na kierownicy:
 
-W kontrolerze strumień pozycji miał na końcu `catch`. To nie jest
-"obsłuż i jedź dalej" — catch kończy strumień na dobre. Jeden wyjątek
-i odbiornik jest martwy aż do restartu aplikacji.
+    DYSTANS          KM
+    TEMPO KM 3       MIN/KM   tempo bieżącego kilometra
+    TEMPO ŚREDNIE    MIN/KM   cały trening, liczony z czasu ruchu
+    KADENCJA         KR/MIN   z licznika kroków
 
-Teraz `retryWhen`: przy błędzie odczekanie i ponowna próba. Przyznanie
-uprawnienia albo włączenie GPS-u w ustawieniach podnosi pomiar samo.
+ROWER i PIESZO bez zmian w układzie (duża cyfra zostaje).
+Tryb decyduje o tym polem `hero` w `ActivityMode`.
 
-### Zła kolejność okien
+## Silnik (`domain/TelemetryEngine.kt`)
 
-Okno o wyjątek od optymalizacji baterii wstawiłem PRZED prośbą
-o uprawnienia. Przejmowało ekran, aplikacja szła w tło, a strumień
-pozycji startował, zanim uprawnienie zostało przyznane — i umierał
-na tym pierwszym wyjątku.
+- **Tempo wygładzone** — z dystansu z ostatnich 20 s, zamiast z dopplera
+  co sekundę. Cyfra przestaje tańczyć. Używa go też TEMPO w trybie PIESZO.
+- **Tempo kilometra** — liczone z czasu RUCHU, więc postój na światłach
+  go nie psuje. Moment przekroczenia pełnego kilometra jest interpolowany.
+  Przez pierwsze 100 m kilometra pokazuje tempo wygładzone, bo dzielenie
+  przez kilkadziesiąt metrów daje bzdury.
+- **Kadencja** — wcześniej pole istniało, ale zawsze było puste.
+  Teraz: przyrost kroków z ostatnich 20 s na minutę. Licznik kroków oddaje
+  zdarzenia paczkami, krótsze okno skakałoby między zerem a dwustoma.
+  Bez nowych kroków przez 6 s → 0.
+- Pojedynczy odrzucony fix nie zeruje już tempa na ekranie.
+- `@Synchronized` na metodach silnika: kroki i pozycja przychodzą
+  z różnych wątków (Dispatchers.Default) i zmieniają ten sam stan.
+- Kroki i kadencja odświeżają się co sekundę także bez nowego fixa.
 
-Teraz o wyjątek pytamy dopiero po przyznaniu dostępu do pozycji.
+## Skalowanie (`ui/theme/Palette.kt`)
 
-## Przy okazji
+- Rozmiary z `Grid` mnożone przez szerokość ekranu względem 411 dp
+  (S20 FE). Węższy telefon — mniejsze cyfry, proporcje te same.
+- Wynik zaokrąglany do pełnych 11 pikseli fizycznych — Departure Mono
+  jest wtedy ostry. Na S20 FE rozmiary zmieniają się minimalnie
+  (etykiety odrobinę większe), za to są ostre.
+- Systemowe powiększenie tekstu jest ignorowane — nie rozsadzi układu.
+- Wszystkie `fontSize` idą teraz przez `gridSp(...)`.
 
-LocationSource rozróżnia trzy przyczyny i mówi wprost którą:
-BRAK UPRAWNIENIA DO POZYCJI, GPS WYŁĄCZONY W SYSTEMIE, BRAK USŁUGI
-LOKALIZACJI. Trafia to do pola `error` w stanie.
+## Test na innym telefonie bez innego telefonu
 
-To pole NIE JEST jeszcze nigdzie wyświetlane. Jeśli po tej poprawce
-nadal nie łapie fixa, powiedz — dorzucę je do linii stanu, żeby
-telefon sam mówił, co jest nie tak, zamiast milczeć.
+    adb shell wm size 720x1600 && adb shell wm density 320
+    adb shell wm size reset && adb shell wm density reset
 
-## Pliki (nadpisane w całości)
+## Pliki
 
+- `domain/Metrics.kt`, `domain/TelemetryEngine.kt`
 - `service/TrackingController.kt`
-- `system/LocationSource.kt`
-- `MainActivity.kt`
+- `ui/theme/Palette.kt`, `ui/TrackingScreen.kt`, `ui/ArchiveScreen.kt`
+- `ui/components/Primitives.kt`, `ui/components/Indicators.kt`

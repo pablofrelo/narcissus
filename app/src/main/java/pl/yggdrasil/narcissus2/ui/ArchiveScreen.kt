@@ -22,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import pl.yggdrasil.narcissus2.domain.Session
 import pl.yggdrasil.narcissus2.ui.components.Label
 import pl.yggdrasil.narcissus2.ui.components.Panel
@@ -30,6 +29,7 @@ import pl.yggdrasil.narcissus2.ui.components.TrackView
 import pl.yggdrasil.narcissus2.ui.components.tap
 import pl.yggdrasil.narcissus2.ui.theme.Theme
 import pl.yggdrasil.narcissus2.ui.theme.Type
+import pl.yggdrasil.narcissus2.ui.theme.gridSp
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -226,7 +226,7 @@ private fun SessionRow(
                 text = "%.2f KM".format(session.distanceM / 1000.0),
                 color = p.readout,
                 fontFamily = Type.Readout,
-                fontSize = 22.sp,
+                fontSize = gridSp(22),
             )
 
             Label(clock(session.elapsedMs), color = p.phosphor, softWrap = false)
@@ -369,7 +369,7 @@ private fun Stat(label: String, value: String, unit: String) {
                 text = value,
                 color = p.readout,
                 fontFamily = Type.Readout,
-                fontSize = 22.sp,
+                fontSize = gridSp(22),
             )
             if (unit.isNotEmpty()) {
                 Label(

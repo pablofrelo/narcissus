@@ -18,11 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import pl.yggdrasil.narcissus2.system.SystemStatus
 import pl.yggdrasil.narcissus2.ui.theme.Grid
 import pl.yggdrasil.narcissus2.ui.theme.Theme
 import pl.yggdrasil.narcissus2.ui.theme.Type
+import pl.yggdrasil.narcissus2.ui.theme.gridSp
 import kotlin.math.abs
 
 /** Progi termiczne. Powyżej 40 stopni telefon zaczyna dławić taktowanie. */
@@ -125,7 +125,7 @@ private fun Indicator(
             text = readout,
             color = tint,
             fontFamily = Type.Readout,
-            fontSize = Grid.UNIT.sp,
+            fontSize = gridSp(Grid.UNIT),
             modifier = Modifier.padding(top = 2.dp),
         )
 
@@ -243,7 +243,7 @@ private fun DetailRow(
             text = value,
             color = valueColor,
             fontFamily = Type.Readout,
-            fontSize = 22.sp,
+            fontSize = gridSp(22),
         )
 
         Label(

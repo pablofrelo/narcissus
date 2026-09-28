@@ -1,13 +1,17 @@
 package pl.yggdrasil.narcissus2.ui.theme
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.TextUnit
 import pl.yggdrasil.narcissus2.R
+import kotlin.math.roundToInt
 
 /**
  * Kolor nie mieszka w komponencie. Komponent zna tylko ROLĘ — "readout",
@@ -70,6 +74,35 @@ object Grid {
     const val VALUE = 33
     const val READOUT = 66
     const val COMMAND = 22
+
+    /** Szerokość, pod którą układ był projektowany (S20 FE, w dp). */
+    const val DESIGN_WIDTH_DP = 411f
+}
+
+/**
+ * Skala siatki: szerokość ekranu względem [Grid.DESIGN_WIDTH_DP].
+ * Węższy telefon dostaje mniejsze cyfry, szerszy większe — proporcje
+ * między etykietą a odczytem zostają te same.
+ */
+val LocalGridScale = staticCompositionLocalOf { 1f }
+
+/**
+ * Rozmiar czcionki z siatki, gotowy do [androidx.compose.material3.Text].
+ *
+ * Dwie rzeczy naraz:
+ *  - wynik zaokrąglamy do pełnej wielokrotności 11 FIZYCZNYCH pikseli,
+ *    bo tylko wtedy piksel fontu trafia w piksel ekranu i nic się nie rozmywa;
+ *  - systemowe powiększenie tekstu jest ignorowane. Tu każdy rozmiar jest
+ *    dobrany do siatki, a powiększona cyfra po prostu nie zmieściłaby się
+ *    w wierszu. Liczymy więc w pikselach, nie w sp.
+ */
+@Composable
+@ReadOnlyComposable
+fun gridSp(size: Int): TextUnit {
+    val density = LocalDensity.current
+    val scale = LocalGridScale.current
+    val px = ((size * density.density * scale) / 11f).roundToInt().coerceAtLeast(1) * 11
+    return with(density) { px.toSp() }
 }
 
 /**
@@ -93,10 +126,15 @@ fun NarcissusTheme(
     day: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(
-        LocalPalette provides if (day) DayPalette else NightPalette,
-        content = content,
-    )
+    BoxWithConstraints {
+        val scale = (maxWidth.value / Grid.DESIGN_WIDTH_DP).coerceIn(0.7f, 1.6f)
+
+        CompositionLocalProvider(
+            LocalPalette provides if (day) DayPalette else NightPalette,
+            LocalGridScale provides scale,
+            content = content,
+        )
+    }
 }
 
 object Theme {
