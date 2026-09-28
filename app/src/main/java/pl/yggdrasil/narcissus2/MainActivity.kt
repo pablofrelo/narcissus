@@ -8,17 +8,18 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
-import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import pl.yggdrasil.narcissus2.system.BatteryExemption
 import pl.yggdrasil.narcissus2.ui.ArchiveScreen
 import pl.yggdrasil.narcissus2.ui.ArchiveViewModel
 import pl.yggdrasil.narcissus2.ui.TrackingScreen
@@ -32,20 +33,27 @@ class MainActivity : ComponentActivity() {
 
     private val permissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { /* Brak zgody obsługujemy w UI — wskaźnik GPS zostaje pusty. */ }
+    ) { granted ->
+        // O wyjątek od baterii pytamy DOPIERO po uprawnieniach.
+        //
+        // Odwrotna kolejność była błędem: systemowe okno przejmowało ekran,
+        // aplikacja szła w tło, a strumień pozycji startował w momencie,
+        // gdy uprawnienia jeszcze nie było.
+        if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true &&
+            !BatteryExemption.isExempt(this)
+        ) {
+            BatteryExemption.request(this)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
-        // Ekran nie gaśnie, dopóki aplikacja jest na wierzchu.
-        //
-        // To jest licznik przykręcony do kierownicy, a nie aplikacja, do
-        // której się wraca — wygaszenie po minucie oznacza, że przez cały
-        // przejazd patrzysz na czarną szybę. Flaga działa tylko na widocznym
-        // oknie, więc po przejściu w tło telefon zasypia normalnie i nie
-        // trzeba jej samemu zdejmować.
+        // Ekran nie gaśnie, dopóki aplikacja jest na wierzchu. Flaga działa
+        // tylko na widocznym oknie, więc po przejściu w tło telefon zasypia
+        // normalnie i nie trzeba jej samemu zdejmować.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         permissions.launch(
@@ -92,16 +100,12 @@ class MainActivity : ComponentActivity() {
                         onToggleDay = tracking::toggleDay,
                         onTogglePosition = tracking::togglePosition,
                         onArchive = {
-                            // Odświeżamy przy wejściu, bo sesja mogła się
-                            // właśnie zapisać.
                             archive.refresh()
                             screen = Screen.Archive
                         },
                     )
 
                     Screen.Archive -> {
-                        // Systemowy gest wstecz: z sesji do listy,
-                        // z listy do licznika.
                         BackHandler {
                             if (archiveState.opened != null) {
                                 archive.close()

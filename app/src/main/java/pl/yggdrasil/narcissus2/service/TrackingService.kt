@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
@@ -29,6 +30,8 @@ import pl.yggdrasil.narcissus2.R
  */
 class TrackingService : LifecycleService() {
 
+    private var wakeLock: PowerManager.WakeLock? = null
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
 
@@ -36,6 +39,17 @@ class TrackingService : LifecycleService() {
             stopSelf()
             return START_NOT_STICKY
         }
+
+        // Foreground chroni proces przed ubiciem, ale NIE trzyma procesora
+        // w czuwaniu. Bez tego po zgaszeniu ekranu pozycje przychodza raz
+        // na kilkadziesiat sekund zamiast raz na sekunde.
+        //
+        // Blokade trzymamy tylko na czas sesji, zwalniana w onDestroy.
+        // Dwanascie godzin to bezpiecznik na wypadek sesji, ktora sie
+        // nigdy nie skonczy.
+        wakeLock = getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "narcissus:tracking")
+            .apply { acquire(12L * 60 * 60 * 1000) }
 
         ServiceCompat.startForeground(
             this,
@@ -76,6 +90,12 @@ class TrackingService : LifecycleService() {
         }
 
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
+        super.onDestroy()
     }
 
     private fun notification(text: String): Notification {

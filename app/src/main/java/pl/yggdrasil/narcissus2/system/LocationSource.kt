@@ -18,40 +18,44 @@ import kotlinx.coroutines.flow.callbackFlow
 /**
  * Źródło pozycji.
  *
- * Surowy GPS_PROVIDER, nie Fused — sprawdzone w testach terenowych: poza
- * miastem surowy GNSS wypada lepiej, bo Fused dokłada zgadywanie z sieci
- * i czujników, a tam gdzie nie ma masztów to zgadywanie tylko szkodzi.
+ * Surowy GPS_PROVIDER, nie Fused — poza miastem surowy GNSS wypada lepiej,
+ * bo Fused dokłada zgadywanie z sieci i czujników, a tam gdzie nie ma
+ * masztów to zgadywanie tylko szkodzi.
  *
  * WAŻNE: to wywołanie faktycznie WŁĄCZA odbiornik. Sam nasłuch statusu
- * satelitów (SystemMonitor) nie budzi sprzętu — bez requestLocationUpdates
- * liczba satelitów zostanie na zerze w nieskończoność.
+ * satelitów (SystemMonitor) nie budzi sprzętu.
  */
 class LocationSource(private val context: Context) {
 
     fun fixes(intervalMs: Long = 1_000L): Flow<Location> = callbackFlow {
         val lm = context.getSystemService(LocationManager::class.java)
 
-        if (lm == null || !granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
-            close(IllegalStateException("Brak uprawnienia do pozycji"))
-            return@callbackFlow
+        // Rzucamy wyjątek zamiast cicho zamykać strumień, bo wyżej siedzi
+        // retryWhen. Dzięki temu przyznanie uprawnienia albo włączenie GPS-u
+        // w trakcie działania aplikacji podnosi pomiar samo, bez restartu.
+        if (lm == null) {
+            throw IllegalStateException("BRAK USŁUGI LOKALIZACJI")
+        }
+
+        if (!granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            throw SecurityException("BRAK UPRAWNIENIA DO POZYCJI")
+        }
+
+        if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            throw IllegalStateException("GPS WYŁĄCZONY W SYSTEMIE")
         }
 
         val listener = LocationListener { location -> trySend(location) }
 
-        try {
-            lm.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                intervalMs,
-                // Zero metrów: filtrowanie robimy sami w TelemetryEngine,
-                // gdzie mamy kontekst trybu i możemy odróżnić szum od ruchu.
-                0f,
-                ContextCompat.getMainExecutor(context),
-                listener,
-            )
-        } catch (e: SecurityException) {
-            close(e)
-            return@callbackFlow
-        }
+        lm.requestLocationUpdates(
+            LocationManager.GPS_PROVIDER,
+            intervalMs,
+            // Zero metrów: filtrowanie robimy sami w TelemetryEngine, gdzie
+            // mamy kontekst trybu i możemy odróżnić szum od ruchu.
+            0f,
+            ContextCompat.getMainExecutor(context),
+            listener,
+        )
 
         awaitClose {
             runCatching { lm.removeUpdates(listener) }

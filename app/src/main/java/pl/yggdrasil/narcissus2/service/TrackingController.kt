@@ -3,6 +3,7 @@ package pl.yggdrasil.narcissus2.service
 import android.content.Context
 import android.location.Location
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -10,12 +11,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
 import pl.yggdrasil.narcissus2.data.SessionStore
 import pl.yggdrasil.narcissus2.domain.ActivityMode
 import pl.yggdrasil.narcissus2.domain.Session
@@ -32,14 +32,9 @@ import java.util.UUID
  * Serce licznika, wyprowadzone poza ViewModel.
  *
  * DLACZEGO NIE VIEWMODEL: ViewModel żyje tak długo, jak ekran. Zgaszenie
- * ekranu, odebranie telefonu albo przełączenie na mapę w trakcie jazdy
- * kończyło pomiar w połowie trasy. Do tej pory nie było tego widać tylko
- * dlatego, że ekran świeci bez przerwy — czyli działało przez przypadek,
- * nie przez konstrukcję.
- *
- * Teraz stan żyje w obiekcie przypiętym do procesu aplikacji, a foreground
- * service trzyma ten proces przy życiu na czas przejazdu. ViewModel jest
- * już tylko oknem na ten stan.
+ * wyświetlacza albo przełączenie na inną aplikację kończyło pomiar
+ * w połowie trasy. Teraz stan żyje w obiekcie przypiętym do procesu,
+ * a foreground service trzyma ten proces przy życiu.
  */
 class TrackingController(private val context: Context) {
 
@@ -77,9 +72,8 @@ class TrackingController(private val context: Context) {
      * Częstotliwość pomiarów. Null wyłącza odbiornik.
      *
      * W przejeździe co sekundę. W czuwaniu co cztery, ale TYLKO gdy ekran
-     * jest widoczny — po schowaniu aplikacji bez aktywnej sesji nie ma
-     * powodu trzymać GNSS-u włączonego, a to najdroższy element w całym
-     * liczniku.
+     * jest widoczny — bez aktywnej sesji nie ma powodu trzymać GNSS-u
+     * włączonego, a to najdroższy element w całym liczniku.
      */
     private val interval = MutableStateFlow<Long?>(null)
 
@@ -92,8 +86,23 @@ class TrackingController(private val context: Context) {
         scope.launch {
             interval
                 .flatMapLatest { ms -> if (ms == null) emptyFlow() else locations.fixes(ms) }
-                .catch { t -> _state.update { it.copy(error = t.message) } }
-                .collect(::onFix)
+                // UWAGA: samo catch tu NIE wystarcza, bo catch KOŃCZY
+                // strumień. Gdy pierwsza próba wypadnie przed przyznaniem
+                // uprawnienia do pozycji, odbiornik zostaje martwy aż do
+                // restartu aplikacji. retryWhen próbuje dalej, więc
+                // przyznanie uprawnienia albo włączenie GPS-u podnosi
+                // pomiar samo.
+                .retryWhen { cause, attempt ->
+                    _state.update { it.copy(error = cause.message) }
+                    delay(if (attempt < 5) 2_000L else 10_000L)
+                    true
+                }
+                .collect { fix ->
+                    if (_state.value.error != null) {
+                        _state.update { it.copy(error = null) }
+                    }
+                    onFix(fix)
+                }
         }
     }
 
