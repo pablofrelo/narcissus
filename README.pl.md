@@ -2,6 +2,7 @@
 
 Licznik rowerowy, biegowy i pieszy na Androida, wyglądający jak terminal
 na *Nostromo*: zielony fosfor na czerni, scanlines, konsolowy krój Spleen.
+Domyślnie po angielsku; `[EN]` w nagłówku przełącza na polski.
 
 *[English](README.md)*
 

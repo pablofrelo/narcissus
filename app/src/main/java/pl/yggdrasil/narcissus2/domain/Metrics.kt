@@ -1,6 +1,8 @@
 package pl.yggdrasil.narcissus2.domain
 
 import java.util.Locale
+import pl.yggdrasil.narcissus2.i18n.Txt
+import pl.yggdrasil.narcissus2.i18n.tr
 
 /**
  * NAJWAŻNIEJSZY WNIOSEK Z PIERWSZEJ BUDOWY.
@@ -52,8 +54,8 @@ data class Telemetry(
  */
 data class Metric(
     val id: String,
-    val label: String,
-    val unit: String,
+    val label: Txt,
+    val unit: Txt,
     /** Etykieta zależna od stanu, np. numer kilometra. Null = stała [label]. */
     val labelOf: ((Telemetry) -> String)? = null,
     val read: (Telemetry) -> String,
@@ -61,60 +63,60 @@ data class Metric(
 
 object Metrics {
 
-    val Distance = Metric("dist", "DYSTANS", "KM") {
+    val Distance = Metric("dist", Txt("DISTANCE", "DYSTANS"), Txt("KM")) {
         fmt("%6.2f", it.distanceM / 1000.0)
     }
 
-    val Speed = Metric("spd", "PRĘDKOŚĆ", "KM/H") {
+    val Speed = Metric("spd", Txt("SPEED", "PRĘDKOŚĆ"), Txt("KM/H")) {
         fmt("%5.1f", it.speedMps * 3.6f)
     }
 
-    val AvgSpeed = Metric("avgspd", "ŚREDNIA", "KM/H") {
+    val AvgSpeed = Metric("avgspd", Txt("AVERAGE", "ŚREDNIA"), Txt("KM/H")) {
         fmt("%5.1f", it.avgMovingSpeedMps * 3.6f)
     }
 
-    val MaxSpeed = Metric("maxspd", "MAKS", "KM/H") {
+    val MaxSpeed = Metric("maxspd", Txt("MAX", "MAKS"), Txt("KM/H")) {
         fmt("%5.1f", it.maxSpeedMps * 3.6f)
     }
 
-    val Pace = Metric("pace", "TEMPO", "MIN/KM") {
+    val Pace = Metric("pace", Txt("PACE", "TEMPO"), Txt("MIN/KM")) {
         formatPace(it.paceSpeedMps)
     }
 
     val LapPace = Metric(
         id = "lappace",
-        label = "TEMPO KM",
-        unit = "MIN/KM",
-        labelOf = { "TEMPO KM ${it.lapIndex}" },
+        label = Txt("PACE KM", "TEMPO KM"),
+        unit = Txt("MIN/KM"),
+        labelOf = { tr("PACE KM ${it.lapIndex}", "TEMPO KM ${it.lapIndex}") },
     ) {
         formatPace(it.lapSpeedMps)
     }
 
-    val AvgPace = Metric("avgpace", "TEMPO ŚR.", "MIN/KM") {
+    val AvgPace = Metric("avgpace", Txt("AVG PACE", "TEMPO ŚR."), Txt("MIN/KM")) {
         formatPace(it.avgMovingSpeedMps)
     }
 
-    val Elapsed = Metric("time", "CZAS", "") {
+    val Elapsed = Metric("time", Txt("TIME", "CZAS"), Txt("")) {
         clock(it.elapsedMs)
     }
 
-    val MovingTime = Metric("mtime", "W RUCHU", "") {
+    val MovingTime = Metric("mtime", Txt("MOVING", "W RUCHU"), Txt("")) {
         clock(it.movingMs)
     }
 
-    val Steps = Metric("steps", "KROKI", "") {
+    val Steps = Metric("steps", Txt("STEPS", "KROKI"), Txt("")) {
         fmt("%5d", it.totalSteps)
     }
 
-    val Cadence = Metric("cad", "KADENCJA", "KR/MIN") { t ->
+    val Cadence = Metric("cad", Txt("CADENCE", "KADENCJA"), Txt("SPM", "KR/MIN")) { t ->
         t.cadenceSpm?.let { fmt("%3d", it) } ?: "---"
     }
 
-    val Fixes = Metric("fix", "POMIARY", "OK/REJ") {
+    val Fixes = Metric("fix", Txt("FIXES", "POMIARY"), Txt("OK/REJ")) {
         fmt("%4d/%d", it.acceptedFixes, it.rejectedFixes)
     }
 
-    val Ascent = Metric("asc", "PRZEWYŻSZENIE", "M") { t ->
+    val Ascent = Metric("asc", Txt("ASCENT", "PRZEWYŻSZENIE"), Txt("M")) { t ->
         t.ascentM?.let { fmt("%4.0f", it) } ?: "----"
     }
 }
@@ -149,7 +151,7 @@ data class Thresholds(
 )
 
 enum class ActivityMode(
-    val label: String,
+    val label: Txt,
     val usesStepSensor: Boolean,
     val thresholds: Thresholds,
     /**
@@ -162,7 +164,7 @@ enum class ActivityMode(
     val metrics: List<Metric>,
 ) {
     Bike(
-        label = "ROWER",
+        label = Txt("BIKE", "ROWER"),
         usesStepSensor = false,
         thresholds = Thresholds(maxAccuracyM = 25f, minSpeedMps = 1.0f, maxSpeedMps = 30f),
         hero = true,
@@ -178,7 +180,7 @@ enum class ActivityMode(
     ),
 
     Run(
-        label = "BIEG",
+        label = Txt("RUN", "BIEG"),
         usesStepSensor = true,
         thresholds = Thresholds(maxAccuracyM = 20f, minSpeedMps = 0.8f, maxSpeedMps = 8f),
         hero = false,
@@ -191,7 +193,7 @@ enum class ActivityMode(
     ),
 
     Walk(
-        label = "PIESZO",
+        label = Txt("WALK", "PIESZO"),
         usesStepSensor = true,
         thresholds = Thresholds(maxAccuracyM = 15f, minSpeedMps = 0.4f, maxSpeedMps = 3f),
         hero = true,

@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.system.SystemStatus
 import pl.yggdrasil.narcissus2.ui.theme.Grid
 import pl.yggdrasil.narcissus2.ui.theme.Theme
@@ -221,20 +222,20 @@ fun PositionPanel(
     ) {
         Panel(modifier.tap(onDismiss)) {
             if (latitude == null || longitude == null) {
-                DetailRow("SZER.", "BRAK FIXA", "", p.amber)
+                DetailRow(tr("LAT.", "SZER."), tr("NO FIX", "BRAK FIXA"), "", p.amber)
             } else {
                 // Pięć miejsc po przecinku to około metra rozdzielczości.
                 // DMS obok, bo mapy papierowe nadal go używają.
-                DetailRow("SZER.", "%.5f".format(latitude), dms(latitude, true))
-                DetailRow("DŁUG.", "%.5f".format(longitude), dms(longitude, false))
+                DetailRow(tr("LAT.", "SZER."), "%.5f".format(latitude), dms(latitude, true))
+                DetailRow(tr("LON.", "DŁUG."), "%.5f".format(longitude), dms(longitude, false))
             }
 
-            accuracyM?.let { DetailRow("BŁĄD", "%.0f M".format(it), "") }
+            accuracyM?.let { DetailRow(tr("ACC.", "BŁĄD"), "%.0f M".format(it), "") }
 
             // Widoczne kontra użyte w rozwiązaniu: duża różnica oznacza
             // przeszkody terenowe, nawet gdy sam fix wygląda poprawnie.
             DetailRow(
-                label = "SATY",
+                label = tr("SATS", "SATY"),
                 value = "${status.gnss.usedInFix}/${status.gnss.visible}",
                 trailing = if (status.gnss.topCn0 > 0f) {
                     "%.0f dBHz".format(status.gnss.topCn0)
@@ -249,8 +250,8 @@ fun PositionPanel(
                     label = "TEMP",
                     value = "%.1f\u00B0C".format(t),
                     trailing = when {
-                        t >= TEMP_CRITICAL -> "PRZEGRZANIE"
-                        t >= TEMP_WARN -> "WYSOKA"
+                        t >= TEMP_CRITICAL -> tr("OVERHEAT", "PRZEGRZANIE")
+                        t >= TEMP_WARN -> tr("HIGH", "WYSOKA")
                         else -> ""
                     },
                     valueColor = when {
@@ -262,9 +263,9 @@ fun PositionPanel(
             }
 
             DetailRow(
-                label = "ZASIL.",
+                label = tr("POWER", "ZASIL."),
                 value = if (status.battery.percent >= 0) "${status.battery.percent}%" else "--",
-                trailing = if (status.battery.charging) "ŁADOWANIE" else "DOTKNIJ BY ZWINĄĆ",
+                trailing = if (status.battery.charging) tr("CHARGING", "ŁADOWANIE") else tr("TAP TO CLOSE", "DOTKNIJ BY ZWINĄĆ"),
             )
         }
     }

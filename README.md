@@ -2,13 +2,13 @@
 
 A bike, run and walk tracker for Android that looks like a terminal on the
 *Nostromo*: green phosphor on black, scanlines, the Spleen console font.
-Everything on screen is in Polish.
+English by default; tap `[EN]` in the header to switch to Polish.
 
 *[Polski](README.pl.md)*
 
 ## What it does
 
-- **Three modes**: ROWER (bike), BIEG (run), PIESZO (walk). Each mode
+- **Three modes**: BIKE, RUN, WALK. Each mode
   declares its own set of readouts and its own GNSS thresholds.
 - **Raw GNSS**, not Fused. In side-by-side tests on two phones the raw
   `GPS_PROVIDER` held up better in the countryside, where Fused could lose

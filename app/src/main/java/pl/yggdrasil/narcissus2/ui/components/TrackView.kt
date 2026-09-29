@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import pl.yggdrasil.narcissus2.domain.TrackPoint
+import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.ui.theme.Theme
 import kotlin.math.PI
 import kotlin.math.cos
@@ -46,7 +47,7 @@ fun TrackView(
         contentAlignment = Alignment.Center,
     ) {
         if (points.size < 2) {
-            Label("BRAK ŚLADU", color = p.dim, softWrap = false)
+            Label(tr("NO TRACK", "BRAK ŚLADU"), color = p.dim, softWrap = false)
             return@Box
         }
 

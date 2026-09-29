@@ -3,6 +3,7 @@ package pl.yggdrasil.narcissus2
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import pl.yggdrasil.narcissus2.i18n.Lang
 import pl.yggdrasil.narcissus2.service.TrackingController
 
 class NarcissusApp : Application() {
@@ -20,6 +21,7 @@ class NarcissusApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        Lang.init(this)
         controller = TrackingController(this)
 
         notifications.createNotificationChannel(

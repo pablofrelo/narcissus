@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pl.yggdrasil.narcissus2.domain.Session
+import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.ui.components.Label
 import pl.yggdrasil.narcissus2.ui.components.Panel
 import pl.yggdrasil.narcissus2.ui.components.TrackView
@@ -81,7 +82,7 @@ fun ArchiveScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Label(
-                if (opened == null) "DZIENNIK" else "SESJA",
+                if (opened == null) tr("LOG", "DZIENNIK") else tr("SESSION", "SESJA"),
                 color = p.dim,
                 softWrap = false,
             )
@@ -97,7 +98,7 @@ fun ArchiveScreen(
                 }
 
                 Label(
-                    "[POWRÓT]",
+                    tr("[BACK]", "[POWRÓT]"),
                     color = p.phosphor,
                     softWrap = false,
                     modifier = Modifier.tap { if (opened == null) onBack() else onClose() },
@@ -108,7 +109,7 @@ fun ArchiveScreen(
         state.syncMessage?.let { msg ->
             Label(
                 msg,
-                color = if (msg.startsWith("BŁĄD")) p.alarm else p.phosphor,
+                color = if (state.syncFailed) p.alarm else p.phosphor,
                 softWrap = false,
             )
         }
@@ -140,13 +141,13 @@ private fun ColumnScope.SessionList(
     val p = Theme.palette
 
     if (state.loading) {
-        Label("WCZYTYWANIE...", color = p.dim)
+        Label(tr("LOADING...", "WCZYTYWANIE..."), color = p.dim)
         return
     }
 
     if (state.sessions.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Label("BRAK ZAPISANYCH SESJI", color = p.dim, softWrap = false)
+            Label(tr("NO SESSIONS RECORDED", "BRAK ZAPISANYCH SESJI"), color = p.dim, softWrap = false)
         }
         return
     }
@@ -160,7 +161,7 @@ private fun ColumnScope.SessionList(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Label(
-            "%d SESJI / %.1f KM".format(state.sessions.size, totalKm),
+            tr("%d SESSIONS / %.1f KM", "%d SESJI / %.1f KM").format(state.sessions.size, totalKm),
             color = p.phosphor,
             softWrap = false,
         )
@@ -169,7 +170,7 @@ private fun ColumnScope.SessionList(
         // do kasowania niczego byłby tylko okazją do pomyłki.
         if (tests > 0) {
             Label(
-                "[USUŃ $tests TEST.]",
+                tr("[DELETE $tests TEST]", "[USUŃ $tests TEST.]"),
                 color = p.amber,
                 softWrap = false,
                 modifier = Modifier.tap(onDeleteTests),
@@ -224,7 +225,7 @@ private fun SessionRow(
             )
 
             Label(
-                if (session.test) "${session.mode.label} / TEST" else session.mode.label,
+                if (session.test) "${session.mode.label.text} / TEST" else session.mode.label.text,
                 color = if (session.test) p.amber else p.phosphor,
                 softWrap = false,
             )
@@ -254,10 +255,10 @@ private fun SessionRow(
                     .padding(top = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Label("DOTKNIJ BY ANULOWAĆ", color = p.dim, softWrap = false)
+                Label(tr("TAP TO CANCEL", "DOTKNIJ BY ANULOWAĆ"), color = p.dim, softWrap = false)
 
                 Label(
-                    "[USUŃ]",
+                    tr("[DELETE]", "[USUŃ]"),
                     color = p.alarm,
                     softWrap = false,
                     modifier = Modifier.tap(onConfirmDelete),
@@ -287,14 +288,14 @@ private fun ColumnScope.SessionDetail(
     val p = Theme.palette
 
     Label(
-        DATE.format(Instant.ofEpochMilli(session.startedAt)) + "  //  " + session.mode.label,
+        DATE.format(Instant.ofEpochMilli(session.startedAt)) + "  //  " + session.mode.label.text,
         color = p.dim,
         softWrap = false,
     )
 
     Panel {
         if (state.trackLoading) {
-            Label("WCZYTYWANIE ŚLADU...", color = p.dim)
+            Label(tr("LOADING TRACK...", "WCZYTYWANIE ŚLADU..."), color = p.dim)
         } else {
             TrackView(state.track)
         }
@@ -305,21 +306,21 @@ private fun ColumnScope.SessionDetail(
             Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.SpaceEvenly,
         ) {
-            Stat("DYSTANS", "%.2f".format(session.distanceM / 1000.0), "KM")
-            Stat("CZAS", clock(session.elapsedMs), "")
-            Stat("W RUCHU", clock(session.movingMs), "")
-            Stat("ŚREDNIA", "%.1f".format(session.avgMovingSpeedMps * 3.6f), "KM/H")
-            Stat("MAKS", "%.1f".format(session.maxSpeedMps * 3.6f), "KM/H")
+            Stat(tr("DISTANCE", "DYSTANS"), "%.2f".format(session.distanceM / 1000.0), "KM")
+            Stat(tr("TIME", "CZAS"), clock(session.elapsedMs), "")
+            Stat(tr("MOVING", "W RUCHU"), clock(session.movingMs), "")
+            Stat(tr("AVERAGE", "ŚREDNIA"), "%.1f".format(session.avgMovingSpeedMps * 3.6f), "KM/H")
+            Stat(tr("MAX", "MAKS"), "%.1f".format(session.maxSpeedMps * 3.6f), "KM/H")
 
             if (session.mode.usesStepSensor) {
-                Stat("KROKI", session.totalSteps.toString(), "")
+                Stat(tr("STEPS", "KROKI"), session.totalSteps.toString(), "")
             }
 
-            Stat("POMIARY", "${session.acceptedFixes}/${session.rejectedFixes}", "OK/REJ")
-            Stat("PUNKTY", session.pointCount.toString(), "")
+            Stat(tr("FIXES", "POMIARY"), "${session.acceptedFixes}/${session.rejectedFixes}", "OK/REJ")
+            Stat(tr("POINTS", "PUNKTY"), session.pointCount.toString(), "")
 
             Stat(
-                "PRZEWYŻSZENIE",
+                tr("ASCENT", "PRZEWYŻSZENIE"),
                 session.ascentM?.let { "%.0f".format(it) } ?: "----",
                 "M",
             )
@@ -336,7 +337,7 @@ private fun ColumnScope.SessionDetail(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Label(
-            if (session.synced) "ZSYNCHRONIZOWANO" else "TYLKO LOKALNIE",
+            if (session.synced) tr("SYNCED", "ZSYNCHRONIZOWANO") else tr("LOCAL ONLY", "TYLKO LOKALNIE"),
             color = if (session.synced) p.phosphor else p.amber,
             softWrap = false,
         )
@@ -344,13 +345,13 @@ private fun ColumnScope.SessionDetail(
         if (state.pendingDelete == session.id) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Label(
-                    "[ANULUJ]",
+                    tr("[CANCEL]", "[ANULUJ]"),
                     color = p.dim,
                     softWrap = false,
                     modifier = Modifier.tap(onCancelDelete),
                 )
                 Label(
-                    "[USUŃ]",
+                    tr("[DELETE]", "[USUŃ]"),
                     color = p.alarm,
                     softWrap = false,
                     modifier = Modifier.tap { onConfirmDelete(session.id) },
@@ -358,7 +359,7 @@ private fun ColumnScope.SessionDetail(
             }
         } else {
             Label(
-                "[USUŃ SESJĘ]",
+                tr("[DELETE SESSION]", "[USUŃ SESJĘ]"),
                 color = p.dim,
                 softWrap = false,
                 modifier = Modifier.tap { onAskDelete(session.id) },
@@ -399,7 +400,7 @@ private fun StoryActions(state: ArchiveUiState, session: Session) {
                 }
                 StoryCard.share(context, card)
             } catch (e: Exception) {
-                error = "BŁĄD KARTY: ${e.message ?: e.javaClass.simpleName}"
+                error = tr("CARD ERROR: ", "BŁĄD KARTY: ") + (e.message ?: e.javaClass.simpleName)
             } finally {
                 busy = false
             }
@@ -417,7 +418,7 @@ private fun StoryActions(state: ArchiveUiState, session: Session) {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Label(
-            if (busy) "RYSOWANIE..." else "[RELACJA + ZDJĘCIE]",
+            if (busy) tr("RENDERING...", "RYSOWANIE...") else tr("[STORY + PHOTO]", "[RELACJA + ZDJĘCIE]"),
             color = if (ready) p.phosphor else p.dim,
             softWrap = false,
             modifier = Modifier.tap {
@@ -429,7 +430,7 @@ private fun StoryActions(state: ArchiveUiState, session: Session) {
             },
         )
         Label(
-            "[RELACJA]",
+            tr("[STORY]", "[RELACJA]"),
             color = if (ready) p.phosphor else p.dim,
             softWrap = false,
             modifier = Modifier.tap { if (ready) make(null) },

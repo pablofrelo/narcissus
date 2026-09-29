@@ -17,6 +17,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import pl.yggdrasil.narcissus2.domain.ActivityMode
+import pl.yggdrasil.narcissus2.i18n.Lang
+import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.ui.components.BurnInShift
 import pl.yggdrasil.narcissus2.ui.components.Command
 import pl.yggdrasil.narcissus2.ui.components.IndicatorStrip
@@ -85,8 +87,16 @@ fun TrackingScreen(
                 Label("NARCISSUS", color = p.dim, softWrap = false)
 
                 if (!state.active) {
+                    // Pokazuje BIEŻĄCY język; dotknięcie przełącza.
                     Label(
-                        "DZIENNIK",
+                        if (Lang.polish) "[PL]" else "[EN]",
+                        color = p.dim,
+                        softWrap = false,
+                        modifier = Modifier.tap(Lang::toggle),
+                    )
+
+                    Label(
+                        tr("LOG", "DZIENNIK"),
                         color = p.phosphor,
                         softWrap = false,
                         modifier = Modifier.tap(onArchive),
@@ -102,7 +112,7 @@ fun TrackingScreen(
             }
 
             ModeSelector(
-                labels = ActivityMode.entries.map { it.label },
+                labels = ActivityMode.entries.map { it.label.text },
                 selectedIndex = state.mode.ordinal,
                 enabled = !state.active,
                 onSelect = { onMode(ActivityMode.entries[it]) },
@@ -169,22 +179,22 @@ private fun StatusLine(state: TrackingUiState) {
     val (text, color) = when {
         // Czuwanie z pełnowartościowym fixem — można ruszać.
         !state.active && state.ready ->
-            "GOTOWOŚĆ - %.0f M".format(acc ?: 0f) to p.phosphor
+            tr("READY - %.0f M", "GOTOWOŚĆ - %.0f M").format(acc ?: 0f) to p.phosphor
 
         // Fix jest, ale za słaby dla progu tego trybu.
         !state.active && state.system.gnss.hasFix ->
-            "SYGNAŁ SŁABY - %.0f M".format(acc ?: 0f) to p.amber
+            tr("WEAK SIGNAL - %.0f M", "SYGNAŁ SŁABY - %.0f M").format(acc ?: 0f) to p.amber
 
-        !state.active -> "POZYSKIWANIE POZYCJI" to p.amber
+        !state.active -> tr("ACQUIRING POSITION", "POZYSKIWANIE POZYCJI") to p.amber
 
-        state.telemetry.warmingUp -> "KALIBRACJA - %.0f M".format(acc ?: 0f) to p.amber
+        state.telemetry.warmingUp -> tr("CALIBRATING - %.0f M", "KALIBRACJA - %.0f M").format(acc ?: 0f) to p.amber
 
         acc != null && acc > state.mode.thresholds.maxAccuracyM ->
-            "SYGNAŁ SŁABY - %.0f M".format(acc) to p.amber
+            tr("WEAK SIGNAL - %.0f M", "SYGNAŁ SŁABY - %.0f M").format(acc) to p.amber
 
-        !state.telemetry.moving -> "POSTÓJ - %.0f M".format(acc ?: 0f) to p.amber
+        !state.telemetry.moving -> tr("STOPPED - %.0f M", "POSTÓJ - %.0f M").format(acc ?: 0f) to p.amber
 
-        else -> "W DRODZE - %.0f M".format(acc ?: 0f) to p.phosphor
+        else -> tr("UNDERWAY - %.0f M", "W DRODZE - %.0f M").format(acc ?: 0f) to p.phosphor
     }
 
     Label(text, color = color, softWrap = false)

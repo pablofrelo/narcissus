@@ -22,6 +22,7 @@ import pl.yggdrasil.narcissus2.domain.Session
 import pl.yggdrasil.narcissus2.domain.Telemetry
 import pl.yggdrasil.narcissus2.domain.TelemetryEngine
 import pl.yggdrasil.narcissus2.domain.TrackPoint
+import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.system.LocationSource
 import pl.yggdrasil.narcissus2.system.StepSource
 import pl.yggdrasil.narcissus2.system.SystemMonitor
@@ -235,7 +236,7 @@ class TrackingController(private val context: Context) {
         if (telemetry.distanceM < MIN_SAVED_DISTANCE_M) {
             scope.launch {
                 store.trackFile(id).delete()
-                flash("SESJA ODRZUCONA - BRAK RUCHU")
+                flash(tr("SESSION DISCARDED - NO MOVEMENT", "SESJA ODRZUCONA - BRAK RUCHU"))
             }
             return
         }
@@ -259,7 +260,7 @@ class TrackingController(private val context: Context) {
 
         scope.launch {
             store.save(session)
-            flash("ZAPISANO %.2f KM".format(session.distanceM / 1000.0))
+            flash(tr("SAVED %.2f KM", "ZAPISANO %.2f KM").format(session.distanceM / 1000.0))
         }
     }
 

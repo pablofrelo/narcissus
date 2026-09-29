@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import pl.yggdrasil.narcissus2.i18n.tr
 
 /**
  * Źródło pozycji.
@@ -34,15 +35,15 @@ class LocationSource(private val context: Context) {
         // retryWhen. Dzięki temu przyznanie uprawnienia albo włączenie GPS-u
         // w trakcie działania aplikacji podnosi pomiar samo, bez restartu.
         if (lm == null) {
-            throw IllegalStateException("BRAK USŁUGI LOKALIZACJI")
+            throw IllegalStateException(tr("NO LOCATION SERVICE", "BRAK USŁUGI LOKALIZACJI"))
         }
 
         if (!granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
-            throw SecurityException("BRAK UPRAWNIENIA DO POZYCJI")
+            throw SecurityException(tr("NO LOCATION PERMISSION", "BRAK UPRAWNIENIA DO POZYCJI"))
         }
 
         if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            throw IllegalStateException("GPS WYŁĄCZONY W SYSTEMIE")
+            throw IllegalStateException(tr("GPS DISABLED IN SYSTEM", "GPS WYŁĄCZONY W SYSTEMIE"))
         }
 
         val listener = LocationListener { location -> trySend(location) }

@@ -22,6 +22,7 @@ import pl.yggdrasil.narcissus2.R
 import pl.yggdrasil.narcissus2.domain.ActivityMode
 import pl.yggdrasil.narcissus2.domain.Session
 import pl.yggdrasil.narcissus2.domain.TrackPoint
+import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.ui.theme.NostromoPalette
 import java.io.File
 import java.time.Instant
@@ -113,7 +114,7 @@ object StoryCard {
 
         // --- nagłówek ---
         var y = 96f
-        y = text(c, "NARCISSUS // ${session.mode.label}", M, y, small, 64f, phosphor)
+        y = text(c, "NARCISSUS // ${session.mode.label.text}", M, y, small, 64f, phosphor)
         y = text(c, DATE.format(Instant.ofEpochMilli(session.startedAt)), M, y + 8f, small, 32f, dim)
 
         // --- dół: liczby, rysowane od dołu w górę ---
@@ -132,7 +133,7 @@ object StoryCard {
 
         // Wielki dystans nad komórkami.
         val km = fmt("%.2f", session.distanceM / 1000.0)
-        bottom = bigReadout(c, "DYSTANS", km, "KM", WIDTH - M, bottom, small, large, phosphor, readout, dim)
+        bottom = bigReadout(c, tr("DISTANCE", "DYSTANS"), km, "KM", WIDTH - M, bottom, small, large, phosphor, readout, dim)
 
         return out
     }
@@ -154,7 +155,7 @@ object StoryCard {
         }
 
         context.startActivity(
-            Intent.createChooser(send, "RELACJA").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            Intent.createChooser(send, tr("STORY", "RELACJA")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
 
@@ -181,17 +182,17 @@ object StoryCard {
     private data class Stat(val label: String, val value: String, val unit: String)
 
     private fun stats(s: Session): List<Stat> {
-        val list = mutableListOf(Stat("CZAS", clock(s.movingMs), ""))
+        val list = mutableListOf(Stat(tr("TIME", "CZAS"), clock(s.movingMs), ""))
 
         if (s.mode == ActivityMode.Bike) {
-            list += Stat("ŚREDNIA", fmt("%.1f", s.avgMovingSpeedMps * 3.6f), "KM/H")
-            list += Stat("MAKS", fmt("%.1f", s.maxSpeedMps * 3.6f), "KM/H")
+            list += Stat(tr("AVERAGE", "ŚREDNIA"), fmt("%.1f", s.avgMovingSpeedMps * 3.6f), "KM/H")
+            list += Stat(tr("MAX", "MAKS"), fmt("%.1f", s.maxSpeedMps * 3.6f), "KM/H")
         } else {
-            list += Stat("TEMPO ŚR.", pace(s.avgMovingSpeedMps), "MIN/KM")
-            if (s.totalSteps > 0) list += Stat("KROKI", s.totalSteps.toString(), "")
+            list += Stat(tr("AVG PACE", "TEMPO ŚR."), pace(s.avgMovingSpeedMps), "MIN/KM")
+            if (s.totalSteps > 0) list += Stat(tr("STEPS", "KROKI"), s.totalSteps.toString(), "")
         }
 
-        s.ascentM?.let { list += Stat("PRZEWYŻSZENIE", fmt("%.0f", it), "M") }
+        s.ascentM?.let { list += Stat(tr("ASCENT", "PRZEWYŻSZENIE"), fmt("%.0f", it), "M") }
         return list
     }
 

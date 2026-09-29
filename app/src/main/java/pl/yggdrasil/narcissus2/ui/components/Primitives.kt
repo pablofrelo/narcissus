@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import pl.yggdrasil.narcissus2.domain.Metric
 import pl.yggdrasil.narcissus2.domain.Telemetry
+import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.ui.theme.Grid
 import pl.yggdrasil.narcissus2.ui.theme.Theme
 import pl.yggdrasil.narcissus2.ui.theme.Type
@@ -123,7 +124,7 @@ fun Readout(
     val p = Theme.palette
 
     Column(modifier, horizontalAlignment = Alignment.End) {
-        Label(metric.labelOf?.invoke(telemetry) ?: metric.label, color = p.phosphor, softWrap = false)
+        Label(metric.labelOf?.invoke(telemetry) ?: metric.label.text, color = p.phosphor, softWrap = false)
 
         Text(
             text = metric.read(telemetry),
@@ -134,8 +135,8 @@ fun Readout(
             softWrap = false,
         )
 
-        if (metric.unit.isNotEmpty()) {
-            Label(metric.unit, color = p.dim, size = Grid.UNIT, softWrap = false)
+        if (metric.unit.text.isNotEmpty()) {
+            Label(metric.unit.text, color = p.dim, size = Grid.UNIT, softWrap = false)
         }
     }
 }
@@ -223,7 +224,7 @@ fun Command(
                 fontSize = gridSp(Grid.COMMAND),
                 letterSpacing = 6.sp,
             )
-            Label("PRZYTRZYMAJ", color = color.copy(alpha = 0.6f), softWrap = false)
+            Label(tr("HOLD", "PRZYTRZYMAJ"), color = color.copy(alpha = 0.6f), softWrap = false)
         }
     }
 }

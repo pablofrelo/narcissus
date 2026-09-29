@@ -15,6 +15,7 @@ import pl.yggdrasil.narcissus2.data.SyncEngine
 import pl.yggdrasil.narcissus2.data.SyncSettings
 import pl.yggdrasil.narcissus2.domain.Session
 import pl.yggdrasil.narcissus2.domain.TrackPoint
+import pl.yggdrasil.narcissus2.i18n.tr
 
 data class ArchiveUiState(
     val sessions: List<Session> = emptyList(),
@@ -28,6 +29,7 @@ data class ArchiveUiState(
     val syncing: Boolean = false,
     /** Wynik ostatniej wymiany — sukces albo powód porażki. */
     val syncMessage: String? = null,
+    val syncFailed: Boolean = false,
     val serverUrl: String = SyncSettings.DEFAULT_URL,
 )
 
@@ -56,7 +58,7 @@ class ArchiveViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.syncing) return
 
         viewModelScope.launch {
-            _state.update { it.copy(syncing = true, syncMessage = null) }
+            _state.update { it.copy(syncing = true, syncMessage = null, syncFailed = false) }
 
             sync.sync()
                 .mapCatching { r ->
@@ -75,9 +77,10 @@ class ArchiveViewModel(app: Application) : AndroidViewModel(app) {
                     _state.update {
                         it.copy(
                             syncing = false,
-                            syncMessage = "WYSŁANO ${r.sent} / ODEBRANO ${r.received}" +
+                            syncMessage = tr("SENT", "WYSŁANO") + " ${r.sent} / " +
+                                tr("RECEIVED", "ODEBRANO") + " ${r.received}" +
                                 if (r.tracksUp + r.tracksDown > 0) {
-                                    "  ŚLADY ${r.tracksUp}↑ ${r.tracksDown}↓"
+                                    tr("  TRACKS", "  ŚLADY") + " ${r.tracksUp}↑ ${r.tracksDown}↓"
                                 } else {
                                     ""
                                 },
@@ -89,7 +92,9 @@ class ArchiveViewModel(app: Application) : AndroidViewModel(app) {
                     _state.update {
                         it.copy(
                             syncing = false,
-                            syncMessage = "BŁĄD: ${t.message?.take(60) ?: "POŁĄCZENIE"}",
+                            syncMessage = tr("ERROR: ", "BŁĄD: ") +
+                                (t.message?.take(60) ?: tr("CONNECTION", "POŁĄCZENIE")),
+                            syncFailed = true,
                         )
                     }
                 }
