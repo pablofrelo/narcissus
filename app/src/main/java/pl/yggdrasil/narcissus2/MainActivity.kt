@@ -27,8 +27,10 @@ import pl.yggdrasil.narcissus2.ui.ArchiveScreen
 import pl.yggdrasil.narcissus2.ui.ArchiveViewModel
 import pl.yggdrasil.narcissus2.ui.TrackingScreen
 import pl.yggdrasil.narcissus2.ui.TrackingViewModel
+import pl.yggdrasil.narcissus2.ui.components.crtGlitch
 import pl.yggdrasil.narcissus2.ui.components.scanlines
 import pl.yggdrasil.narcissus2.ui.theme.NarcissusTheme
+import pl.yggdrasil.narcissus2.ui.theme.Theme
 
 /** Dwa ekrany to za mało na bibliotekę nawigacyjną. Jedna zmienna wystarcza. */
 private enum class Screen { Tracking, Archive }
@@ -95,8 +97,9 @@ class MainActivity : ComponentActivity() {
             }
 
             NarcissusTheme {
-                // Linie jak na monitorze CRT — nad wszystkim, łącznie z paskami systemu.
-                Box(Modifier.fillMaxSize().scanlines()) {
+                // Linie jak na monitorze CRT — nad wszystkim, łącznie z paskami
+                // systemu — i co jakiś czas zakłócenie obrazu pod nimi.
+                Box(Modifier.fillMaxSize().scanlines().crtGlitch(Theme.palette.phosphor)) {
                     when (screen) {
                         Screen.Tracking -> TrackingScreen(
                             state = state,
