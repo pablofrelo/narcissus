@@ -9,10 +9,13 @@ import android.content.pm.PackageManager
 import android.location.GnssStatus
 import android.location.LocationManager
 import android.os.BatteryManager
+import android.os.Build
 import android.telephony.CellSignalStrength
+import android.telephony.PhoneStateListener
 import android.telephony.SignalStrength
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyManager
+import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -131,24 +134,48 @@ class SystemMonitor(private val context: Context) {
             )
         }
 
-        val cb = object : TelephonyCallback(), TelephonyCallback.SignalStrengthsListener {
-            override fun onSignalStrengthsChanged(s: SignalStrength) = push(s)
-        }
-
-        try {
-            tm.registerTelephonyCallback(ContextCompat.getMainExecutor(context), cb)
+        // TelephonyCallback jest od Androida 12. Na 11 (Moto G8) samo
+        // dotknięcie tej klasy wywalało aplikację przy starcie
+        // (NoClassDefFoundError), więc tam idzie stary PhoneStateListener.
+        val unregister: () -> Unit = try {
+            val u = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                listenModern(tm, ::push)
+            } else {
+                listenLegacy(tm, ::push)
+            }
 
             // Callback odzywa się przy ZMIANIE siły sygnału. Gdy zasięg stoi
             // w miejscu, pierwsza emisja potrafi nie przyjść przez długi czas
             // — więc bierzemy stan bieżący od razu przy rejestracji.
             tm.signalStrength?.let(::push)
+            u
         } catch (e: SecurityException) {
             trySend(SystemStatus.Cellular())
+            val noop: () -> Unit = {}
+            noop
         }
 
-        awaitClose {
-            runCatching { tm.unregisterTelephonyCallback(cb) }
+        awaitClose { runCatching { unregister() } }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun listenModern(tm: TelephonyManager, push: (SignalStrength) -> Unit): () -> Unit {
+        val cb = object : TelephonyCallback(), TelephonyCallback.SignalStrengthsListener {
+            override fun onSignalStrengthsChanged(s: SignalStrength) = push(s)
         }
+        tm.registerTelephonyCallback(ContextCompat.getMainExecutor(context), cb)
+        return { tm.unregisterTelephonyCallback(cb) }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun listenLegacy(tm: TelephonyManager, push: (SignalStrength) -> Unit): () -> Unit {
+        // Konstruktor z Executorem — ten bez argumentów wymaga Loopera,
+        // a flow chodzi na Dispatchers.Default.
+        val listener = object : PhoneStateListener(ContextCompat.getMainExecutor(context)) {
+            override fun onSignalStrengthsChanged(s: SignalStrength) = push(s)
+        }
+        tm.listen(listener, PhoneStateListener.LISTEN_SIGNAL_STRENGTHS)
+        return { tm.listen(listener, PhoneStateListener.LISTEN_NONE) }
     }
 
     // ----------------------------------------------------------------

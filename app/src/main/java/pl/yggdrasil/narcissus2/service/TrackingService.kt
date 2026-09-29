@@ -5,7 +5,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -63,20 +62,21 @@ class TrackingService : LifecycleService() {
             this,
             NOTIFICATION_ID,
             notification("0.00 KM  0:00:00"),
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            } else {
-                0
-            },
+            // Typ ZAWSZE location. Wcześniej tylko od Androida 14, a niżej 0 —
+            // czyli serwis BEZ typu. Na Androidzie 11–13 (S20 FE, Moto G8)
+            // aplikacja z uprawnieniem "podczas używania" dostaje pozycję
+            // w tle tylko przez serwis typu location, więc przy zgaszonym
+            // ekranie fixy przestawały przychodzić. Faza 1 wołała
+            // startForeground bez typu, co bierze typ z manifestu — działało.
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
         )
 
         val controller = NarcissusApp.instance.controller
 
-        // Pozycję w sesji pobiera SERWIS, nie kontroler — jak w fazie 1.
-        // W narcissus-2 prosił o nią kontroler z zasięgu aplikacji i na
-        // spacerze 29.09 przez 19 z 30 minut przy zgaszonym ekranie nie
-        // przyszedł ani jeden fix. Faza 1 z żądaniem w serwisie miała
-        // 1419 fixów bez przerwy.
+        // Pozycję w sesji pobiera serwis, jak w fazie 1 — żądanie ma
+        // wtedy jednoznacznego właściciela o typie location. Spacer 29.09:
+        // 19 z 30 minut bez fixów przy zgaszonym ekranie (serwis był wtedy
+        // bez typu, patrz startForeground wyżej).
         if (locationJob?.isActive != true) locationJob = lifecycleScope.launch(Dispatchers.Default) {
             LocationSource(this@TrackingService).fixes(1_000L)
                 .retryWhen { cause, _ ->
