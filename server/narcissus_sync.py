@@ -88,7 +88,7 @@ async def sync(request: Request):
             continue
 
         row = conn.execute(
-            "SELECT updatedAt FROM sessions WHERE id = ?", (sid,)
+            "SELECT updatedAt, ascentM FROM sessions WHERE id = ?", (sid,)
         ).fetchone()
 
         # Wygrywa nowszy updatedAt. Nagrobek nie jest wyjątkiem — jeśli jest
@@ -100,13 +100,23 @@ async def sync(request: Request):
         values["test"] = 1 if s.get("test") else 0
         values["device"] = device
 
+        # Przewyższenie liczy tylko serwer. Urządzenie z nowszym updatedAt,
+        # które jeszcze go nie ma, nie może skasować policzonej wartości.
+        # Scalony rekord dostaje świeży znacznik i wraca do urządzenia.
+        merged = False
+        if values.get("ascentM") is None and row and row["ascentM"] is not None:
+            values["ascentM"] = row["ascentM"]
+            values["updatedAt"] = stamp
+            merged = True
+
         cols = ", ".join(values.keys())
         marks = ", ".join("?" for _ in values)
         conn.execute(
             f"INSERT OR REPLACE INTO sessions ({cols}) VALUES ({marks})",
             tuple(values.values()),
         )
-        accepted.add(sid)
+        if not merged:
+            accepted.add(sid)
 
         if values.get("deletedAt"):
             track = TRACKS / f"{sid}.jsonl"
