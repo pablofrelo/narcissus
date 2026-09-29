@@ -16,7 +16,7 @@ import pl.yggdrasil.narcissus2.R
  * Kolor nie mieszka w komponencie. Komponent zna tylko ROLĘ — "readout",
  * "chrome", "alarm" — a motyw podstawia pod rolę wartość.
  *
- * Dzięki temu dodanie trzeciego motywu to jeden obiekt [Palette] i zero
+ * Dzięki temu dodanie drugiego motywu to jeden obiekt [Palette] i zero
  * zmian w widokach.
  */
 data class Palette(
