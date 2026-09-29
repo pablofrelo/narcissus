@@ -197,6 +197,10 @@ class SessionStore(context: Context) {
         .put("synced", synced)
     }
 
+    // isNull, nie has: serwer odsyła brakujące pola jako null, a has()
+    // zwraca dla nulla true — getLong/getDouble rzucały wtedy wyjątek
+    // i sync po cichu pomijał KAŻDĄ żywą sesję z serwera (deletedAt = null).
+    // Stąd przewyższenie policzone na serwerze nigdy nie docierało.
     fun sessionFromJson(o: JSONObject): Session = with(o) {
         Session(
         id = getString("id"),
@@ -211,11 +215,11 @@ class SessionStore(context: Context) {
         totalSteps = getInt("totalSteps"),
         acceptedFixes = getInt("acceptedFixes"),
         rejectedFixes = getInt("rejectedFixes"),
-        ascentM = if (has("ascentM")) getDouble("ascentM") else null,
+        ascentM = if (isNull("ascentM")) null else getDouble("ascentM"),
         pointCount = optInt("pointCount", 0),
         test = optBoolean("test", false),
         updatedAt = optLong("updatedAt", getLong("endedAt")),
-        deletedAt = if (has("deletedAt")) getLong("deletedAt") else null,
+        deletedAt = if (isNull("deletedAt")) null else getLong("deletedAt"),
         synced = optBoolean("synced", false),
         )
     }

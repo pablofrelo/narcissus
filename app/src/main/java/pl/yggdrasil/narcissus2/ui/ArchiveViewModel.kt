@@ -3,6 +3,7 @@ package pl.yggdrasil.narcissus2.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,6 +59,18 @@ class ArchiveViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(syncing = true, syncMessage = null) }
 
             sync.sync()
+                .mapCatching { r ->
+                    // Przewyższenie serwer liczy w tle po odebraniu śladu.
+                    // Krótką trasę ma gotową po kilku sekundach — druga
+                    // wymiana od razu ją ściąga, bez drugiego kliknięcia.
+                    if (r.tracksUp > 0) {
+                        delay(ASCENT_WAIT_MS)
+                        val again = sync.sync().getOrThrow()
+                        r.copy(received = r.received + again.received)
+                    } else {
+                        r
+                    }
+                }
                 .onSuccess { r ->
                     _state.update {
                         it.copy(
@@ -126,5 +139,10 @@ class ArchiveViewModel(app: Application) : AndroidViewModel(app) {
             store.deleteAllTest()
             refresh()
         }
+    }
+
+    companion object {
+        /** Tyle czekamy na przewyższenie przed drugą wymianą. */
+        private const val ASCENT_WAIT_MS = 8_000L
     }
 }

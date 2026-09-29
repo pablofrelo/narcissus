@@ -26,9 +26,12 @@ class SyncSettings(context: Context) {
             prefs.edit().putString("device", it).apply()
         }
 
+    // Nowy klucz = jednorazowa pełna wymiana po aktualizacji. Do 29.09
+    // telefon odrzucał wszystkie sesje z serwera (błąd w parsowaniu nulli),
+    // więc przewyższenia policzone wcześniej trzeba ściągnąć od zera.
     var lastSyncAt: Long
-        get() = prefs.getLong("lastSync", 0L)
-        set(v) = prefs.edit().putLong("lastSync", v).apply()
+        get() = prefs.getLong("lastSync2", 0L)
+        set(v) = prefs.edit().putLong("lastSync2", v).apply()
 
     companion object {
         const val DEFAULT_URL = "http://10.8.0.1:8765"

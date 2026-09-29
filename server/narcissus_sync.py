@@ -80,6 +80,7 @@ async def sync(request: Request):
 
     conn = db()
     stamp = now_ms()
+    accepted = set()
 
     for s in incoming:
         sid = s.get("id")
@@ -105,6 +106,7 @@ async def sync(request: Request):
             f"INSERT OR REPLACE INTO sessions ({cols}) VALUES ({marks})",
             tuple(values.values()),
         )
+        accepted.add(sid)
 
         if values.get("deletedAt"):
             track = TRACKS / f"{sid}.jsonl"
@@ -113,15 +115,16 @@ async def sync(request: Request):
     conn.commit()
 
     # Odsyłamy wszystko, co zmieniło się po naszej stronie od "since",
-    # z pominięciem tego, co przed chwilą przyszło od tego urządzenia.
-    incoming_ids = {s.get("id") for s in incoming}
+    # z pominięciem tego, co przed chwilą PRZYJĘLIŚMY od tego urządzenia.
+    # Nie wszystkiego, co przysłało: jeśli nasza wersja wygrała (np. ma już
+    # policzone przewyższenie), urządzenie musi ją dostać z powrotem.
     rows = conn.execute(
         "SELECT * FROM sessions WHERE updatedAt > ?", (since,)
     ).fetchall()
 
     out = []
     for r in rows:
-        if r["id"] in incoming_ids:
+        if r["id"] in accepted:
             continue
         item = {f: r[f] for f in FIELDS}
         item["test"] = bool(r["test"])
