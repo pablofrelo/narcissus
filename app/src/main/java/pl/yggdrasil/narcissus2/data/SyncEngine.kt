@@ -47,6 +47,7 @@ class SyncEngine(
         var received = 0
         var tracksDown = 0
         val byId = local.associateBy { it.id }
+        val receivedIds = mutableSetOf<String>()
 
         for (i in 0 until response.sessions.length()) {
             val remote = runCatching {
@@ -59,6 +60,7 @@ class SyncEngine(
             if (current != null && current.updatedAt >= remote.updatedAt) continue
 
             store.save(remote.copy(synced = true))
+            receivedIds += remote.id
             received++
 
             if (remote.deletedAt != null) {
@@ -83,7 +85,12 @@ class SyncEngine(
 
         // Dopiero teraz oznaczamy wysłane jako zsynchronizowane — gdyby
         // wymiana padła w połowie, próbujemy ich jeszcze raz następnym razem.
-        outgoing.forEach { store.save(it.copy(synced = true)) }
+        //
+        // Z pominięciem tego, co serwer właśnie odesłał: to ta sama sesja
+        // w nowszej wersji (np. z przewyższeniem), a zapis starej kopii
+        // z [outgoing] by ją nadpisał. Tak Moto gubił przewyższenie
+        // własnej przejażdżki przy każdej wymianie.
+        outgoing.filterNot { it.id in receivedIds }.forEach { store.save(it.copy(synced = true)) }
 
         // Zegar bierzemy od SERWERA. Zegary telefonów potrafią się rozjechać
         // o minuty, a rozjechany znacznik "since" oznacza zgubione zmiany.
