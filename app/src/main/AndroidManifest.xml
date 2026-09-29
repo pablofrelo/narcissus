@@ -48,6 +48,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Karta relacji: plik z cache udostępniany innym aplikacjom (FB). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/share_paths" />
+        </provider>
+
         <service
             android:name=".service.TrackingService"
             android:exported="false"

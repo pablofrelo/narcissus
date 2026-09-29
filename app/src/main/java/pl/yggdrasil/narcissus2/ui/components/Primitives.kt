@@ -1,5 +1,9 @@
 package pl.yggdrasil.narcissus2.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,26 +14,27 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameMillis
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import pl.yggdrasil.narcissus2.domain.Metric
 import pl.yggdrasil.narcissus2.domain.Telemetry
 import pl.yggdrasil.narcissus2.ui.theme.Grid
@@ -37,15 +42,24 @@ import pl.yggdrasil.narcissus2.ui.theme.Theme
 import pl.yggdrasil.narcissus2.ui.theme.Type
 import pl.yggdrasil.narcissus2.ui.theme.gridSp
 
-/** Klik bez ripple'a. Ripple w tej estetyce wygląda jak wpadka. */
+/**
+ * Dotknięcie bez ripple'a, za to z krótką wibracją (jak w fazie 1).
+ *
+ * W ruchu patrzysz na drogę, nie na ekran — tknięcie w palec jest jedynym
+ * potwierdzeniem, że trafiłeś. TextHandleMove to najkrótszy impuls, jaki
+ * system oferuje; mocniejszy zostaje dla przycisków pod klapką.
+ */
 @Composable
 fun Modifier.tap(onClick: () -> Unit): Modifier {
     val source = remember { MutableInteractionSource() }
+    val haptic = LocalHapticFeedback.current
     return this.clickable(
         interactionSource = source,
         indication = null,
-        onClick = onClick,
-    )
+    ) {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        onClick()
+    }
 }
 
 @Composable
@@ -82,7 +96,7 @@ fun Panel(
             .fillMaxWidth()
             .background(p.hull)
             .border(1.dp, p.grid)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(5.dp),
         horizontalAlignment = alignment,
         content = content,
     )
@@ -114,9 +128,10 @@ fun Readout(
         Text(
             text = metric.read(telemetry),
             color = p.readout,
-            fontFamily = Type.Readout,
+            fontFamily = Type.forSize(valueSize),
             fontSize = gridSp(valueSize),
             maxLines = 1,
+            softWrap = false,
         )
 
         if (metric.unit.isNotEmpty()) {
@@ -126,16 +141,15 @@ fun Readout(
 }
 
 /**
- * Przycisk komendy wymagający PRZYTRZYMANIA.
+ * Przycisk komendy pod klapką bezpieczeństwa (wzór z fazy 1).
  *
- * Zwykłe dotknięcie odpada: telefon jedzie w uchwycie na kierownicy, a
- * przypadkowe muśnięcie kończące przejazd w połowie trasy to strata, której
- * nie da się odzyskać. Dwie sekundy to za długo na przypadek i za krótko,
- * żeby denerwowało.
+ * Zakreskowany jak osłona nad przełącznikiem uzbrojenia. Wymaga
+ * PRZYTRZYMANIA: telefon jest w uchwycie albo w ręce w biegu, a przypadkowe
+ * muśnięcie kończące trening w połowie to strata nie do odzyskania. Dwie
+ * sekundy to za długo na przypadek i za krótko, żeby denerwowało.
  *
- * Postęp wypełnia przycisk od lewej. Bez tego przytrzymanie jest irytujące,
- * bo nie wiadomo, ile jeszcze — a puszczenie sekundę za wcześnie nie daje
- * żadnej informacji zwrotnej.
+ * Postęp wypełnia przycisk od lewej, kreskowanie przy tym gaśnie. Mocna
+ * wibracja na początku i na końcu — w ruchu to jedyne potwierdzenie.
  */
 @Composable
 fun Command(
@@ -143,77 +157,73 @@ fun Command(
     color: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    holdMs: Long = 2_000L,
+    holdMs: Int = 2_000,
 ) {
-    val p = Theme.palette
-    var progress by remember { mutableFloatStateOf(0f) }
-    var pressed by remember { mutableStateOf(false) }
-
-    LaunchedEffect(pressed) {
-        if (!pressed) {
-            // Odjazd do zera jest szybszy niż narastanie — puszczenie
-            // przycisku ma być natychmiast widoczne.
-            while (progress > 0f) {
-                progress = (progress - 0.08f).coerceAtLeast(0f)
-                delay(16)
-            }
-            return@LaunchedEffect
-        }
-
-        val startedAt = withFrameMillis { it }
-        while (progress < 1f) {
-            val elapsed = withFrameMillis { it } - startedAt
-            progress = (elapsed.toFloat() / holdMs).coerceIn(0f, 1f)
-        }
-
-        pressed = false
-        progress = 0f
-        onClick()
-    }
+    val progress = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    // pointerInput żyje dłużej niż jedna kompozycja — bez tego wywołałby
+    // nieaktualną wersję onClick.
+    val action by rememberUpdatedState(onClick)
+    val haptic = LocalHapticFeedback.current
 
     Box(
         modifier
             .fillMaxWidth()
-            .height(66.dp)
+            .height(84.dp)
             .border(1.dp, color)
-            .pointerInput(Unit) {
+            .pointerInput(holdMs) {
                 detectTapGestures(
                     onPress = {
-                        pressed = true
-                        // Czeka na puszczenie albo anulowanie gestu.
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val run = scope.launch {
+                            progress.animateTo(1f, tween(holdMs, easing = LinearEasing))
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            progress.snapTo(0f)
+                            action()
+                        }
                         tryAwaitRelease()
-                        pressed = false
+                        if (progress.value < 1f) {
+                            run.cancel()
+                            scope.launch { progress.animateTo(0f, tween(200)) }
+                        }
                     },
                 )
             },
         contentAlignment = Alignment.Center,
     ) {
-        // Wypełnienie postępu pod tekstem.
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(progress)
-                .background(color.copy(alpha = 0.22f))
-                .align(Alignment.CenterStart),
-        )
+        Canvas(Modifier.fillMaxSize()) {
+            val p = progress.value
 
-        Text(
-            text = text,
-            color = color,
-            fontFamily = Type.Chrome,
-            fontSize = gridSp(Grid.COMMAND),
-            letterSpacing = 7.sp,
-        )
-
-        if (progress > 0.02f) {
-            Label(
-                "PRZYTRZYMAJ",
-                color = p.dim,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 6.dp),
-                softWrap = false,
+            drawRect(
+                color = color.copy(alpha = 0.22f),
+                size = Size(size.width * p, size.height),
             )
+
+            val hatchAlpha = 0.30f * (1f - p)
+            if (hatchAlpha > 0.01f) {
+                val step = 16.dp.toPx()
+                var x = -size.height
+                while (x < size.width + size.height) {
+                    drawLine(
+                        color = color.copy(alpha = hatchAlpha),
+                        start = Offset(x, size.height),
+                        end = Offset(x + size.height, 0f),
+                        strokeWidth = 2f,
+                    )
+                    x += step
+                }
+            }
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = text,
+                color = color,
+                fontFamily = Type.Chrome,
+                fontSize = gridSp(Grid.COMMAND),
+                letterSpacing = 6.sp,
+            )
+            Label("PRZYTRZYMAJ", color = color.copy(alpha = 0.6f), softWrap = false)
         }
     }
 }
@@ -248,7 +258,7 @@ fun ModeSelector(
                     .border(1.dp, edge)
                     .background(if (chosen) p.hull else p.void)
                     .then(if (enabled) Modifier.tap { onSelect(i) } else Modifier)
-                    .padding(vertical = 8.dp),
+                    .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Label(

@@ -93,14 +93,12 @@ class TrackingController(private val context: Context) {
                 // przyznanie uprawnienia albo włączenie GPS-u podnosi
                 // pomiar samo.
                 .retryWhen { cause, attempt ->
-                    _state.update { it.copy(error = cause.message) }
+                    locationError(cause.message)
                     delay(if (attempt < 5) 2_000L else 10_000L)
                     true
                 }
                 .collect { fix ->
-                    if (_state.value.error != null) {
-                        _state.update { it.copy(error = null) }
-                    }
+                    locationError(null)
                     onFix(fix)
                 }
         }
@@ -115,7 +113,8 @@ class TrackingController(private val context: Context) {
 
     private fun retune() {
         interval.value = when {
-            _state.value.active -> ACTIVE_INTERVAL_MS
+            // W sesji pozycję pobiera sam serwis — patrz TrackingService.
+            _state.value.active -> null
             foreground -> STANDBY_INTERVAL_MS
             else -> null
         }
@@ -128,7 +127,11 @@ class TrackingController(private val context: Context) {
 
     // ----------------------------------------------------------------
 
-    private fun onFix(fix: Location) {
+    internal fun locationError(message: String?) {
+        if (_state.value.error != message) _state.update { it.copy(error = message) }
+    }
+
+    internal fun onFix(fix: Location) {
         val e = engine
 
         if (e == null) {
@@ -268,7 +271,6 @@ class TrackingController(private val context: Context) {
 
     companion object {
         private const val STANDBY_INTERVAL_MS = 4_000L
-        private const val ACTIVE_INTERVAL_MS = 1_000L
         private const val MIN_SAVED_DISTANCE_M = 50.0
     }
 }

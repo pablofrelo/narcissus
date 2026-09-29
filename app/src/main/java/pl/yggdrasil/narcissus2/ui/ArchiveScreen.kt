@@ -27,9 +27,24 @@ import pl.yggdrasil.narcissus2.ui.components.Label
 import pl.yggdrasil.narcissus2.ui.components.Panel
 import pl.yggdrasil.narcissus2.ui.components.TrackView
 import pl.yggdrasil.narcissus2.ui.components.tap
+import pl.yggdrasil.narcissus2.ui.theme.Grid
 import pl.yggdrasil.narcissus2.ui.theme.Theme
 import pl.yggdrasil.narcissus2.ui.theme.Type
 import pl.yggdrasil.narcissus2.ui.theme.gridSp
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import pl.yggdrasil.narcissus2.share.StoryCard
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -226,7 +241,7 @@ private fun SessionRow(
                 text = "%.2f KM".format(session.distanceM / 1000.0),
                 color = p.readout,
                 fontFamily = Type.Readout,
-                fontSize = gridSp(22),
+                fontSize = gridSp(Grid.VALUE_SMALL),
             )
 
             Label(clock(session.elapsedMs), color = p.phosphor, softWrap = false)
@@ -251,7 +266,7 @@ private fun SessionRow(
         } else {
             Label(
                 "[X]",
-                color = p.grid,
+                color = p.dim,
                 softWrap = false,
                 modifier = Modifier
                     .align(Alignment.End)
@@ -311,6 +326,9 @@ private fun ColumnScope.SessionDetail(
         }
     }
 
+    // --- relacja na FB: karta 9:16 z opcjonalnym zdjęciem w tle ---
+    StoryActions(state, session)
+
     // Stan synchronizacji — bez tego nie wiadomo, czy sesja jest już
     // bezpieczna na heimdallu, czy istnieje tylko na telefonie.
     Row(
@@ -341,7 +359,7 @@ private fun ColumnScope.SessionDetail(
         } else {
             Label(
                 "[USUŃ SESJĘ]",
-                color = p.grid,
+                color = p.dim,
                 softWrap = false,
                 modifier = Modifier.tap { onAskDelete(session.id) },
             )
@@ -349,6 +367,76 @@ private fun ColumnScope.SessionDetail(
     }
 
     Spacer(Modifier.height(4.dp))
+}
+
+/**
+ * Dwie akcje: karta ze zdjęciem z galerii (zatopionym w tle) albo sama
+ * karta na czerni. Rysowanie idzie w tle, potem systemowe okno
+ * "Udostępnij" — stamtąd Facebook → Relacja.
+ */
+@Composable
+private fun StoryActions(state: ArchiveUiState, session: Session) {
+    val p = Theme.palette
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    fun make(photo: Uri?) {
+        if (busy) return
+        busy = true
+        error = null
+        val track = state.track
+        scope.launch {
+            try {
+                val card = withContext(Dispatchers.Default) {
+                    StoryCard.render(
+                        context,
+                        session,
+                        track,
+                        photo?.let { StoryCard.loadPhoto(context, it) },
+                    )
+                }
+                StoryCard.share(context, card)
+            } catch (e: Exception) {
+                error = "BŁĄD KARTY: ${e.message ?: e.javaClass.simpleName}"
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> if (uri != null) make(uri) }
+
+    val ready = !state.trackLoading && !busy
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Label(
+            if (busy) "RYSOWANIE..." else "[RELACJA + ZDJĘCIE]",
+            color = if (ready) p.phosphor else p.dim,
+            softWrap = false,
+            modifier = Modifier.tap {
+                if (ready) {
+                    picker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                }
+            },
+        )
+        Label(
+            "[RELACJA]",
+            color = if (ready) p.phosphor else p.dim,
+            softWrap = false,
+            modifier = Modifier.tap { if (ready) make(null) },
+        )
+    }
+
+    error?.let { Label(it, color = p.alarm, softWrap = false) }
 }
 
 @Composable
@@ -369,7 +457,7 @@ private fun Stat(label: String, value: String, unit: String) {
                 text = value,
                 color = p.readout,
                 fontFamily = Type.Readout,
-                fontSize = gridSp(22),
+                fontSize = gridSp(Grid.VALUE_SMALL),
             )
             if (unit.isNotEmpty()) {
                 Label(

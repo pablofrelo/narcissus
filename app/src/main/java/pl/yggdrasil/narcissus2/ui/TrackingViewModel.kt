@@ -18,7 +18,6 @@ import pl.yggdrasil.narcissus2.system.SystemStatus
 data class TrackingUiState(
     val mode: ActivityMode = ActivityMode.Bike,
     val active: Boolean = false,
-    val day: Boolean = false,
     val telemetry: Telemetry = Telemetry(),
     val system: SystemStatus = SystemStatus(),
     val positionVisible: Boolean = false,
@@ -34,14 +33,13 @@ data class TrackingUiState(
 
 /** Rzeczy, które dotyczą wyłącznie wyglądu i nie mają prawa przeżyć ekranu. */
 private data class LocalUi(
-    val day: Boolean = false,
     val positionVisible: Boolean = false,
 )
 
 /**
  * ViewModel jest teraz cienki: pomiar mieszka w kontrolerze przypiętym do
- * procesu, tutaj zostaje tylko stan czysto ekranowy (motyw, rozwinięty
- * panel pozycji) i przekazywanie poleceń dalej.
+ * procesu, tutaj zostaje tylko stan czysto ekranowy (rozwinięty panel
+ * pozycji) i przekazywanie poleceń dalej.
  */
 class TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -53,7 +51,6 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
             TrackingUiState(
                 mode = c.mode,
                 active = c.active,
-                day = ui.day,
                 telemetry = c.telemetry,
                 system = c.system,
                 positionVisible = ui.positionVisible,
@@ -65,8 +62,6 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TrackingUiState())
 
     fun setMode(mode: ActivityMode) = controller.setMode(mode)
-
-    fun toggleDay() = local.update { it.copy(day = !it.day) }
 
     fun togglePosition() = local.update { it.copy(positionVisible = !it.positionVisible) }
 

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tylko katalog z kartą relacji — nic więcej z aplikacji nie wychodzi. -->
+<paths>
+    <cache-path name="share" path="share/" />
+</paths>

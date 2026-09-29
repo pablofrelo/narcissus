@@ -1,17 +1,16 @@
 package pl.yggdrasil.narcissus2.ui.theme
 
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.TextUnit
 import pl.yggdrasil.narcissus2.R
-import kotlin.math.roundToInt
 
 /**
  * Kolor nie mieszka w komponencie. Komponent zna tylko ROLĘ — "readout",
@@ -31,110 +30,100 @@ data class Palette(
     val alarm: Color,
 )
 
-/** NOC — zielony fosfor na czerni absolutnej (OLED nie zapala pikseli). */
-val NightPalette = Palette(
-    void = Color(0xFF000000),
-    hull = Color(0xFF071008),
-    grid = Color(0xFF143D20),
-    dim = Color(0xFF2E8B4F),
-    phosphor = Color(0xFF3FE06B),
-    readout = Color(0xFFB6FFCC),
-    amber = Color(0xFFFFB000),
-    alarm = Color(0xFFFF3B30),
-)
-
 /**
- * DZIEŃ — ekri jak papier z drukarki igłowej, atrament prawie czarny.
- *
- * To NIE jest odwrócony motyw nocny: zielony fosfor na beżu byłby
- * nieczytelny. W pełnym słońcu liczy się wyłącznie kontrast, więc rolę
- * "readout" gra tu najciemniejszy kolor, nie najjaśniejszy.
+ * NOSTROMO — kolory ze strony pablofrelo.github.io, 1:1 z CSS.
+ * Jedyny motyw: na Nostromo nie ma dnia.
  */
-val DayPalette = Palette(
-    void = Color(0xFFE9E2CE),
-    hull = Color(0xFFDED5BD),
-    grid = Color(0xFFA89E84),
-    dim = Color(0xFF6B6250),
-    phosphor = Color(0xFF2A2620),
-    readout = Color(0xFF14110C),
-    amber = Color(0xFF9A5B00),
-    alarm = Color(0xFFA11208),
+val NostromoPalette = Palette(
+    void = Color(0xFF050806),
+    hull = Color(0xFF0A120C),
+    grid = Color(0xFF163D22),
+    dim = Color(0xFF4F9A68),
+    phosphor = Color(0xFF8CFFB0),
+    readout = Color(0xFFD4FFE0),
+    amber = Color(0xFFFFB000),
+    alarm = Color(0xFFFF5A4A),
 )
 
 /**
- * Rozmiary — wszystkie wielokrotności 11.
+ * Siatka Spleen, dobrana dla ekranu 1080 px (jak w fazie 1). Na innych
+ * szerokościach [gridSp] przeliczy ją proporcjonalnie.
  *
- * Departure Mono jest fontem pikselowym: ostre krawędzie wychodzą tylko
- * przy rozmiarach będących wielokrotnością siatki. Poza nią renderer
- * interpoluje i piksele się rozmywają.
+ * Spleen jest krojem BITMAPOWYM: wersji OpenType trzeba używać w pełnych
+ * wielokrotnościach rozmiaru, w jakim autor go narysował. Stąd dwa warianty
+ * i wartości w pikselach, nie w sp.
  */
 object Grid {
-    const val LABEL = 11
-    const val UNIT = 11
-    const val VALUE = 33
-    const val READOUT = 66
-    const val COMMAND = 22
+    /** Wielka cyfra, wariant 32×64. */
+    const val READOUT = 352
+    /** Liczby w komórkach. */
+    const val VALUE = 128
+    /** Przyciski. */
+    const val COMMAND = 96
+    /** Etykiety, status, nagłówek. */
+    const val LABEL = 64
+    /** Jednostki i odczyty wskaźników. */
+    const val UNIT = 64
+    /** Wartości w listach (dziennik, panel pozycji). */
+    const val VALUE_SMALL = 64
 
-    /** Szerokość, pod którą układ był projektowany (S20 FE, w dp). */
-    const val DESIGN_WIDTH_DP = 411f
+    /** Od tego rozmiaru bierzemy wariant 32×64. */
+    const val LARGE_FROM = 256
 }
 
-/**
- * Skala siatki: szerokość ekranu względem [Grid.DESIGN_WIDTH_DP].
- * Węższy telefon dostaje mniejsze cyfry, szerszy większe — proporcje
- * między etykietą a odczytem zostają te same.
- */
-val LocalGridScale = staticCompositionLocalOf { 1f }
+/** Szerokość ekranu, dla której dobrano wartości w [Grid]. */
+private const val REFERENCE_WIDTH_PX = 1080
 
 /**
- * Rozmiar czcionki z siatki, gotowy do [androidx.compose.material3.Text].
+ * Rozmiar z siatki, przeskalowany do szerokości ekranu i przyciągnięty
+ * do komórki kroju.
  *
- * Dwie rzeczy naraz:
- *  - wynik zaokrąglamy do pełnej wielokrotności 11 FIZYCZNYCH pikseli,
- *    bo tylko wtedy piksel fontu trafia w piksel ekranu i nic się nie rozmywa;
- *  - systemowe powiększenie tekstu jest ignorowane. Tu każdy rozmiar jest
- *    dobrany do siatki, a powiększona cyfra po prostu nie zmieściłaby się
- *    w wierszu. Liczymy więc w pikselach, nie w sp.
+ * Dlaczego nie zwykłe sp: skalowanie ciągłe rozmywa bitmapę. Dlaczego nie
+ * stałe piksele: 352 px cyfry to jedna trzecia szerokości na 1080 px, ale
+ * połowa na 720 px. Skalujemy więc proporcjonalnie i zaokrąglamy W DÓŁ do
+ * pełnej komórki (32 px albo 64 px) — rozmiar jest zawsze całkowitą krotnością
+ * tego, co narysował autor, więc zostaje ostry na każdym telefonie.
+ *
+ * Systemowe powiększenie tekstu celowo nie ma tu wpływu: licznik ma wyglądać
+ * tak samo niezależnie od ustawień telefonu i nie rozsadzać układu.
  */
 @Composable
 @ReadOnlyComposable
-fun gridSp(size: Int): TextUnit {
+fun gridSp(pixels: Int): TextUnit {
     val density = LocalDensity.current
-    val scale = LocalGridScale.current
-    val px = ((size * density.density * scale) / 11f).roundToInt().coerceAtLeast(1) * 11
-    return with(density) { px.toSp() }
+    val screenPx = LocalConfiguration.current.screenWidthDp * density.density
+
+    val cell = if (pixels >= Grid.LARGE_FROM) 64 else 32
+    val scaled = (pixels * screenPx / REFERENCE_WIDTH_PX).toInt()
+    val snapped = ((scaled / cell) * cell).coerceAtLeast(cell)
+
+    return with(density) { snapped.toSp() }
 }
 
 /**
- * Kroje pisma.
+ * Spleen — font konsoli OpenBSD (Frederic Cambus, BSD 2-Clause).
  *
- * Rozdzielone na dwa pola mimo tej samej wartości — kiedyś możesz chcieć
- * cieńszego kroju na etykiety, a rozdzielenie teraz nic nie kosztuje.
- *
- * UWAGA: zakłada plik app/src/main/res/font/departure_mono.ttf (albo .otf).
- * Jeśli nazwałeś go inaczej, popraw referencję poniżej.
+ * UWAGA: wymaga plików z fazy 1:
+ *   app/src/main/res/font/spleen_16x32.otf
+ *   app/src/main/res/font/spleen_32x64.otf
  */
 object Type {
-    val Readout: FontFamily = FontFamily(Font(R.font.departure_mono))
-    val Chrome: FontFamily = FontFamily(Font(R.font.departure_mono))
+    /** 16×32 — etykiety, liczby w komórkach, przyciski. */
+    val Chrome: FontFamily = FontFamily(Font(R.font.spleen_16x32))
+    val Readout: FontFamily = FontFamily(Font(R.font.spleen_16x32))
+
+    /** 32×64 — wielka cyfra. */
+    val ReadoutLarge: FontFamily = FontFamily(Font(R.font.spleen_32x64))
+
+    fun forSize(pixels: Int): FontFamily =
+        if (pixels >= Grid.LARGE_FROM) ReadoutLarge else Readout
 }
 
-val LocalPalette = staticCompositionLocalOf { NightPalette }
+val LocalPalette = staticCompositionLocalOf { NostromoPalette }
 
 @Composable
-fun NarcissusTheme(
-    day: Boolean = false,
-    content: @Composable () -> Unit,
-) {
-    BoxWithConstraints {
-        val scale = (maxWidth.value / Grid.DESIGN_WIDTH_DP).coerceIn(0.7f, 1.6f)
-
-        CompositionLocalProvider(
-            LocalPalette provides if (day) DayPalette else NightPalette,
-            LocalGridScale provides scale,
-            content = content,
-        )
-    }
+fun NarcissusTheme(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalPalette provides NostromoPalette, content = content)
 }
 
 object Theme {

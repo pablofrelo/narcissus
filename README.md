@@ -1,64 +1,68 @@
-# narcissus-2
+# NARCISSUS
 
-Licznik rowerowo-biegowy. Druga budowa, pisana od zera z wnioskami z pierwszej.
+A bike, run and walk tracker for Android that looks like a terminal on the
+*Nostromo*: green phosphor on black, scanlines, the Spleen console font.
+Everything on screen is in Polish.
 
-## Co jest zrobione
+*[Polski](README.pl.md)*
 
-- **Rejestr metryk** (`domain/Metrics.kt`) — metryka jest daną, tryb deklaruje
-  listę, ekran renderuje listę. Dodanie czwartego trybu nie dotyka UI.
-- **Motywy noc/dzień** (`ui/theme/Palette.kt`) — kolor nie mieszka w komponencie,
-  komponent zna tylko rolę. Przełącznik `[NOC]/[DZIEŃ]` w nagłówku.
-- **Wskaźniki GPS/GSM/PWR** (`system/`, `ui/components/Indicators.kt`) — trzy
-  niezależne strumienie scalone w jeden, kolumna po lewej od dużego odczytu.
-- **Pozycja na żądanie** — dotknięcie wskaźnika GPS rozwija panel ze
-  współrzędnymi w stopniach dziesiętnych i DMS.
-- **Szkielet serwisu** (`service/TrackingService.kt`) — foreground z typem
-  `location`, poprawnie wystartowany.
+## What it does
 
-## Czego nie ma jeszcze
+- **Three modes**: ROWER (bike), BIEG (run), PIESZO (walk). Each mode
+  declares its own set of readouts and its own GNSS thresholds.
+- **Raw GNSS**, not Fused. In side-by-side tests on two phones the raw
+  `GPS_PROVIDER` held up better in the countryside, where Fused could lose
+  minutes of track.
+- **Distance without phantom kilometres**: fixes are filtered by accuracy
+  and by implausible jumps, and distance only grows once the position moves
+  away from an anchor by more than the noise floor. Standing at a traffic
+  light adds nothing.
+- **Pace**: smoothed over the last 20 s, plus the pace of the current
+  kilometre. **Cadence** from the step counter.
+- **Session log** stored on the phone, with a map of each track.
+- **Story card**: a 1080×1920 image of a session (your photo fading into
+  black, the numbers, a small map), shared through the system share sheet.
+- **Hold to start and stop** (2 s), so a brush of the finger can't end a
+  workout halfway.
+- **Burn-in protection**: the layout drifts slowly across the AMOLED panel.
 
-- Silnika pomiarowego: filtrowania fixów, liczenia dystansu, czujnika kroków.
-  Miejsce na to jest w `TrackingService`, a punkt wejścia do UI to
-  `TrackingViewModel.onTelemetry()`.
-- Dziennika sesji i synchronizacji z heimdallem.
-- Sekwencera.
+## Sync server (optional)
 
-## Wysokość
+`server/` holds a small FastAPI service that keeps sessions in SQLite and
+adds **elevation gain** from the Polish national terrain model (GUGiK NMT,
+1 m grid). The phone stores only latitude and longitude: GNSS altitude is
+too noisy to sum, and the terrain model gives the same number for the same
+track every time. The elevation lookup works for Poland only.
 
-S20 FE nie ma barometru. Jedyne źródło w telefonie to GNSS, a to wysokość
-elipsoidalna z szumem rzędu kilkunastu metrów — sumowanie takiego sygnału daje
-setki metrów podjazdu na płaskim parkingu.
+The server has **no authentication**. It is meant to listen inside a
+WireGuard network, and that network is the trust boundary. Don't expose it
+publicly.
 
-Dlatego telefon zapisuje **wyłącznie lat/lon**, a przewyższenie dolicza serwer
-przy synchronizacji, z modelu terenu (NMT z GUGiK dla Polski). Wynik jest
-powtarzalny: ten sam ślad zawsze da tę samą liczbę. Pole `Telemetry.ascentM`
-zostaje `null` do czasu synchronizacji i metryka pokazuje wtedy `----`.
+    cd server
+    docker compose up -d
 
-## Pierwsze uruchomienie
+The app talks to it over plain HTTP. The address `10.8.0.1:8765` appears
+in three places; change all of them to your own:
 
-W paczce nie ma binarki `gradle-wrapper.jar` (nie da się jej przesłać
-tekstem). Wygeneruj wrapper przed pierwszym buildem:
+- `server/compose.yml` (bind address)
+- `app/src/main/java/pl/yggdrasil/narcissus2/data/SyncSettings.kt` (`DEFAULT_URL`)
+- `app/src/main/res/xml/network_security_config.xml` (the only host allowed
+  to use cleartext)
 
-    cd narcissus-2
-    gradle wrapper
+## Building
 
-albo po prostu otwórz katalog w Android Studio — zaproponuje to samo.
+Android 11 (API 30) or newer.
 
-Potem:
-
-    ./gradlew assembleDebug
     ./gradlew installDebug
 
-## Czcionka
+## About the code
 
-Docelowo Spleen, ten sam co na TTY. Wrzuć TTF do `app/src/main/res/font/`
-i podmień `Type.Readout` w `ui/theme/Palette.kt` na
-`FontFamily(Font(R.font.spleen))`. Na razie `FontFamily.Monospace` — kluczowa
-jest stała szerokość cyfry, bo bez niej liczby skaczą przy każdej zmianie.
+NARCISSUS was written by an AI (Claude, by Anthropic) under my direction:
+I set the goal and the look, tested it on my phone on walks and rides,
+and reported what was wrong, round after round. I did not write the code
+myself, and I want that to be clear up front.
 
-## Uprawnienia — uwaga
+## License
 
-Siła sygnału GSM przez `TelephonyCallback.SignalStrengthsListener` **nie**
-wymaga `READ_PHONE_STATE`. Nie dodawaj tego uprawnienia, dopóki nie okaże się,
-że na Twoim urządzeniu naprawdę jest potrzebne — kod jest zabezpieczony
-`try/catch` na `SecurityException`.
+[MIT](LICENSE). The Spleen font by Frederic Cambus is under the
+[BSD 2-Clause license](licenses/SPLEEN.txt).

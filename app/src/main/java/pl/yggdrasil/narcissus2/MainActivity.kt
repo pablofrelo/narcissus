@@ -8,11 +8,14 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -24,6 +27,7 @@ import pl.yggdrasil.narcissus2.ui.ArchiveScreen
 import pl.yggdrasil.narcissus2.ui.ArchiveViewModel
 import pl.yggdrasil.narcissus2.ui.TrackingScreen
 import pl.yggdrasil.narcissus2.ui.TrackingViewModel
+import pl.yggdrasil.narcissus2.ui.components.scanlines
 import pl.yggdrasil.narcissus2.ui.theme.NarcissusTheme
 
 /** Dwa ekrany to za mało na bibliotekę nawigacyjną. Jedna zmienna wystarcza. */
@@ -90,41 +94,43 @@ class MainActivity : ComponentActivity() {
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            NarcissusTheme(day = state.day) {
-                when (screen) {
-                    Screen.Tracking -> TrackingScreen(
-                        state = state,
-                        onCommence = tracking::commence,
-                        onTerminate = { tracking.terminate() },
-                        onMode = tracking::setMode,
-                        onToggleDay = tracking::toggleDay,
-                        onTogglePosition = tracking::togglePosition,
-                        onArchive = {
-                            archive.refresh()
-                            screen = Screen.Archive
-                        },
-                    )
-
-                    Screen.Archive -> {
-                        BackHandler {
-                            if (archiveState.opened != null) {
-                                archive.close()
-                            } else {
-                                screen = Screen.Tracking
-                            }
-                        }
-
-                        ArchiveScreen(
-                            state = archiveState,
-                            onOpen = archive::open,
-                            onClose = archive::close,
-                            onBack = { screen = Screen.Tracking },
-                            onAskDelete = archive::askDelete,
-                            onCancelDelete = archive::cancelDelete,
-                            onConfirmDelete = archive::confirmDelete,
-                            onSync = archive::runSync,
-                            onDeleteTests = archive::deleteAllTest,
+            NarcissusTheme {
+                // Linie jak na monitorze CRT — nad wszystkim, łącznie z paskami systemu.
+                Box(Modifier.fillMaxSize().scanlines()) {
+                    when (screen) {
+                        Screen.Tracking -> TrackingScreen(
+                            state = state,
+                            onCommence = tracking::commence,
+                            onTerminate = { tracking.terminate() },
+                            onMode = tracking::setMode,
+                            onTogglePosition = tracking::togglePosition,
+                            onArchive = {
+                                archive.refresh()
+                                screen = Screen.Archive
+                            },
                         )
+
+                        Screen.Archive -> {
+                            BackHandler {
+                                if (archiveState.opened != null) {
+                                    archive.close()
+                                } else {
+                                    screen = Screen.Tracking
+                                }
+                            }
+
+                            ArchiveScreen(
+                                state = archiveState,
+                                onOpen = archive::open,
+                                onClose = archive::close,
+                                onBack = { screen = Screen.Tracking },
+                                onAskDelete = archive::askDelete,
+                                onCancelDelete = archive::cancelDelete,
+                                onConfirmDelete = archive::confirmDelete,
+                                onSync = archive::runSync,
+                                onDeleteTests = archive::deleteAllTest,
+                            )
+                        }
                     }
                 }
             }

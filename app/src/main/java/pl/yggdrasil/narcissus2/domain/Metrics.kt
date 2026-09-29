@@ -1,5 +1,7 @@
 package pl.yggdrasil.narcissus2.domain
 
+import java.util.Locale
+
 /**
  * NAJWAŻNIEJSZY WNIOSEK Z PIERWSZEJ BUDOWY.
  *
@@ -60,19 +62,19 @@ data class Metric(
 object Metrics {
 
     val Distance = Metric("dist", "DYSTANS", "KM") {
-        "%.2f".format(it.distanceM / 1000.0)
+        fmt("%6.2f", it.distanceM / 1000.0)
     }
 
     val Speed = Metric("spd", "PRĘDKOŚĆ", "KM/H") {
-        "%.1f".format(it.speedMps * 3.6f)
+        fmt("%5.1f", it.speedMps * 3.6f)
     }
 
     val AvgSpeed = Metric("avgspd", "ŚREDNIA", "KM/H") {
-        "%.1f".format(it.avgMovingSpeedMps * 3.6f)
+        fmt("%5.1f", it.avgMovingSpeedMps * 3.6f)
     }
 
     val MaxSpeed = Metric("maxspd", "MAKS", "KM/H") {
-        "%.1f".format(it.maxSpeedMps * 3.6f)
+        fmt("%5.1f", it.maxSpeedMps * 3.6f)
     }
 
     val Pace = Metric("pace", "TEMPO", "MIN/KM") {
@@ -88,7 +90,7 @@ object Metrics {
         formatPace(it.lapSpeedMps)
     }
 
-    val AvgPace = Metric("avgpace", "TEMPO ŚREDNIE", "MIN/KM") {
+    val AvgPace = Metric("avgpace", "TEMPO ŚR.", "MIN/KM") {
         formatPace(it.avgMovingSpeedMps)
     }
 
@@ -101,19 +103,19 @@ object Metrics {
     }
 
     val Steps = Metric("steps", "KROKI", "") {
-        it.totalSteps.toString()
+        fmt("%5d", it.totalSteps)
     }
 
     val Cadence = Metric("cad", "KADENCJA", "KR/MIN") { t ->
-        t.cadenceSpm?.toString() ?: "---"
+        t.cadenceSpm?.let { fmt("%3d", it) } ?: "---"
     }
 
     val Fixes = Metric("fix", "POMIARY", "OK/REJ") {
-        "${it.acceptedFixes}/${it.rejectedFixes}"
+        fmt("%4d/%d", it.acceptedFixes, it.rejectedFixes)
     }
 
     val Ascent = Metric("asc", "PRZEWYŻSZENIE", "M") { t ->
-        t.ascentM?.let { "%.0f".format(it) } ?: "----"
+        t.ascentM?.let { fmt("%4.0f", it) } ?: "----"
     }
 }
 
@@ -164,13 +166,14 @@ enum class ActivityMode(
         usesStepSensor = false,
         thresholds = Thresholds(maxAccuracyM = 25f, minSpeedMps = 1.0f, maxSpeedMps = 30f),
         hero = true,
+        // Przewyższenia nie ma na żywym ekranie: liczy je serwer po
+        // synchronizacji, więc w trakcie jazdy zawsze pokazywałoby "----".
         metrics = listOf(
             Metrics.Speed,
             Metrics.Distance,
             Metrics.Elapsed,
             Metrics.AvgSpeed,
             Metrics.MaxSpeed,
-            Metrics.Ascent,
         ),
     ),
 
@@ -207,10 +210,22 @@ enum class ActivityMode(
 private fun formatPace(speedMps: Float): String {
     if (speedMps <= 1000f / (30 * 60)) return "--:--"
     val total = (1000f / speedMps).toInt()
-    return "%d:%02d".format(total / 60, total % 60)
+    return fmt("%2d:%02d", total / 60, total % 60)
 }
 
+/** Czas zawsze jako H:MM:SS — po pierwszej godzinie wiersz nie podskoczy. */
 private fun clock(ms: Long): String {
     val s = ms / 1000
-    return "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)
+    return fmt("%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
 }
+
+/**
+ * Formatowanie liczb na ekranie (zasada z fazy 1).
+ *
+ * Locale.US niezależnie od telefonu: polski locale daje przecinek, a wtedy
+ * liczba na ekranie różni się od tej samej liczby w eksporcie. Stałe
+ * szerokości ("%6.2f") trzymają wiersz w miejscu, kiedy liczba zmienia
+ * rząd wielkości.
+ */
+internal fun fmt(format: String, vararg args: Any?): String =
+    String.format(Locale.US, format, *args)

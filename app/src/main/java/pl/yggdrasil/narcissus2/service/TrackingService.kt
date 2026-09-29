@@ -11,19 +11,24 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import pl.yggdrasil.narcissus2.MainActivity
 import pl.yggdrasil.narcissus2.NarcissusApp
 import pl.yggdrasil.narcissus2.R
+import pl.yggdrasil.narcissus2.system.LocationSource
 
 /**
  * Utrzymuje proces przy życiu na czas przejazdu.
  *
- * Sam nie mierzy — mierzy [TrackingController]. Serwis jest kotwicą: dopóki
- * działa jako foreground, system nie ubije procesu, więc kontroler zbiera
- * pozycje także przy zgaszonym ekranie i przy aplikacji w tle.
+ * Liczy [TrackingController], ale pozycję w sesji pobiera serwis — żądanie
+ * złożone przez foreground service typu location dostaje fixy także przy
+ * zgaszonym ekranie. Poza sesją (czuwanie) o pozycję prosi kontroler.
  *
  * Powiadomienie pokazuje dystans i czas, żeby dało się je sprawdzić bez
  * wracania do aplikacji.
@@ -31,6 +36,9 @@ import pl.yggdrasil.narcissus2.R
 class TrackingService : LifecycleService() {
 
     private var wakeLock: PowerManager.WakeLock? = null
+
+    /** Jedno żądanie pozycji na serwis — onStartCommand bywa wołany ponownie. */
+    private var locationJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -63,6 +71,24 @@ class TrackingService : LifecycleService() {
         )
 
         val controller = NarcissusApp.instance.controller
+
+        // Pozycję w sesji pobiera SERWIS, nie kontroler — jak w fazie 1.
+        // W narcissus-2 prosił o nią kontroler z zasięgu aplikacji i na
+        // spacerze 29.09 przez 19 z 30 minut przy zgaszonym ekranie nie
+        // przyszedł ani jeden fix. Faza 1 z żądaniem w serwisie miała
+        // 1419 fixów bez przerwy.
+        if (locationJob?.isActive != true) locationJob = lifecycleScope.launch(Dispatchers.Default) {
+            LocationSource(this@TrackingService).fixes(1_000L)
+                .retryWhen { cause, _ ->
+                    controller.locationError(cause.message)
+                    delay(2_000L)
+                    true
+                }
+                .collect { fix ->
+                    controller.locationError(null)
+                    controller.onFix(fix)
+                }
+        }
 
         lifecycleScope.launch {
             controller.state

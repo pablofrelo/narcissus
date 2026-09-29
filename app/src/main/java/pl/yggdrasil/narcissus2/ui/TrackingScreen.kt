@@ -6,14 +6,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import pl.yggdrasil.narcissus2.domain.ActivityMode
 import pl.yggdrasil.narcissus2.ui.components.BurnInShift
 import pl.yggdrasil.narcissus2.ui.components.Command
-import pl.yggdrasil.narcissus2.ui.components.IndicatorRail
+import pl.yggdrasil.narcissus2.ui.components.IndicatorStrip
 import pl.yggdrasil.narcissus2.ui.components.Label
 import pl.yggdrasil.narcissus2.ui.components.ModeSelector
 import pl.yggdrasil.narcissus2.ui.components.Panel
@@ -36,14 +34,10 @@ import pl.yggdrasil.narcissus2.ui.theme.Theme
 /**
  * Ekran nie wie nic o trybach.
  *
- * Bierze listę metryk z [ActivityMode], kładzie pierwszą na duży wyświetlacz,
- * a resztę stawia w kolumnie pod spodem. Zmiana zestawu odczytów to zmiana
- * listy w enumie, nie zmiana tego pliku.
- *
- * Układ: górny panel to sam duży odczyt na pełną szerokość. Dolny dzieli się
- * na wskaźniki podsystemów po lewej i kolumnę pozostałych odczytów po prawej.
- * Wszystkie odczyty — duży i małe — używają tego samego wzoru [Readout],
- * więc oko nie musi przełączać się między dwoma układami.
+ * Bierze listę metryk z [ActivityMode]. W trybach z [ActivityMode.hero]
+ * pierwsza metryka idzie na wielką cyfrę, reszta — i wszystkie w trybie
+ * bez hero — w komórki po dwie w rzędzie, jak w fazie 1. Zmiana zestawu
+ * odczytów to zmiana listy w enumie, nie zmiana tego pliku.
  */
 @Composable
 fun TrackingScreen(
@@ -51,13 +45,13 @@ fun TrackingScreen(
     onCommence: () -> Unit,
     onTerminate: () -> Unit,
     onMode: (ActivityMode) -> Unit,
-    onToggleDay: () -> Unit,
     onTogglePosition: () -> Unit,
     onArchive: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = Theme.palette
     val metrics = state.mode.metrics
+    val hero = state.mode.hero
 
     // Ekran świeci bez przerwy, a układ stoi w miejscu — na AMOLED-zie to
     // przepis na wypalenie etykiet. Treść powoli wędruje po matrycy.
@@ -68,24 +62,27 @@ fun TrackingScreen(
             .fillMaxSize()
             .background(p.void)
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .burnInPadding(horizontal = 12.dp, vertical = 8.dp, shift = shift),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .burnInPadding(horizontal = 16.dp, vertical = 16.dp, shift = shift),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
 
-        // --- nagłówek ---
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+        // Wszystko nad przyciskiem przewija się. Rozwinięty panel pozycji
+        // w trybie z pięcioma metrykami nie mieści się na ekranie — bez
+        // przewijania wypychał START poza krawędź.
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Label("NARCISSUS // ${state.mode.label}", color = p.dim, softWrap = false)
-
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Label(
-                    if (state.day) "[DZIEŃ]" else "[NOC]",
-                    color = p.phosphor,
-                    softWrap = false,
-                    modifier = Modifier.tap(onToggleDay),
-                )
+            // --- nagłówek ---
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                // Tryb widać w selektorze niżej; w nagłówku "PIESZO" + "DZIENNIK"
+                // nie mieściło się w jednej linii.
+                Label("NARCISSUS", color = p.dim, softWrap = false)
 
                 if (!state.active) {
                     Label(
@@ -96,66 +93,61 @@ fun TrackingScreen(
                     )
                 }
             }
-        }
 
-        StatusLine(state)
+            // --- status ---
+            StatusLine(state)
 
-        state.notice?.let { notice ->
-            Label(notice, color = p.amber, softWrap = false)
-        }
-
-        ModeSelector(
-            labels = ActivityMode.entries.map { it.label },
-            selectedIndex = state.mode.ordinal,
-            enabled = !state.active,
-            onSelect = { onMode(ActivityMode.entries[it]) },
-        )
-
-        PositionPanel(
-            visible = state.positionVisible,
-            latitude = state.latitude,
-            longitude = state.longitude,
-            accuracyM = state.telemetry.lastAccuracyM,
-            status = state.system,
-            onDismiss = onTogglePosition,
-        )
-
-        // --- panel górny: sam duży odczyt, pełna szerokość ---
-        // Tylko w trybach z [ActivityMode.hero]. W biegu telefon jest w ręce,
-        // więc wszystkie odczyty idą do jednej kolumny, jednym rozmiarem.
-        if (state.mode.hero) {
-            Panel(alignment = Alignment.End) {
-                Readout(
-                    metric = metrics[0],
-                    telemetry = state.telemetry,
-                    valueSize = Grid.READOUT,
-                )
+            state.notice?.let { notice ->
+                Label(notice, color = p.amber, softWrap = false)
             }
-        }
 
-        // --- panel dolny: wskaźniki po lewej, odczyty po prawej ---
-        Panel(Modifier.weight(1f)) {
-            Row(Modifier.fillMaxHeight()) {
+            ModeSelector(
+                labels = ActivityMode.entries.map { it.label },
+                selectedIndex = state.mode.ordinal,
+                enabled = !state.active,
+                onSelect = { onMode(ActivityMode.entries[it]) },
+            )
 
-                IndicatorRail(
-                    status = state.system,
-                    onTapGnss = onTogglePosition,
-                    modifier = Modifier.fillMaxHeight(),
-                )
+            // --- wskaźniki podsystemów, w pasku ---
+            Panel {
+                IndicatorStrip(status = state.system, onTapGnss = onTogglePosition)
+            }
 
-                Spacer(Modifier.width(12.dp))
+            PositionPanel(
+                visible = state.positionVisible,
+                latitude = state.latitude,
+                longitude = state.longitude,
+                accuracyM = state.telemetry.lastAccuracyM,
+                status = state.system,
+                onDismiss = onTogglePosition,
+            )
 
-                // Rozłożone na całą wysokość panelu — to właśnie miejsce,
-                // które wcześniej stało puste u dołu ekranu.
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    metrics.drop(if (state.mode.hero) 1 else 0).forEach { metric ->
-                        Readout(metric, state.telemetry)
+            // --- wielka cyfra, tylko w trybach z hero ---
+            if (hero) {
+                Panel(alignment = Alignment.End) {
+                    Readout(
+                        metric = metrics[0],
+                        telemetry = state.telemetry,
+                        valueSize = Grid.READOUT,
+                    )
+                }
+            }
+
+            // --- komórki po dwie w rzędzie ---
+            Panel {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    metrics.drop(if (hero) 1 else 0).chunked(2).forEach { row ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            row.forEach { metric ->
+                                Readout(metric, state.telemetry, Modifier.weight(1f))
+                            }
+                            // Nieparzysta liczba metryk: pusta komórka trzyma
+                            // szerokość, żeby ostatnia nie rozjechała się na cały rząd.
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -195,5 +187,5 @@ private fun StatusLine(state: TrackingUiState) {
         else -> "W DRODZE - %.0f M".format(acc ?: 0f) to p.phosphor
     }
 
-    Label(text, color = color, softWrap = false, modifier = Modifier.height(16.dp))
+    Label(text, color = color, softWrap = false)
 }

@@ -37,22 +37,28 @@ private const val TEMP_CRITICAL = 45f
  * jednego piksela wysokości — a trafiają tam, gdzie ląduje wzrok przy
  * zerknięciu na dużą cyfrę.
  */
+private data class IndicatorSpec(
+    val tag: String,
+    val level: Int,
+    val readout: String,
+    val tint: Color,
+    val onTap: (() -> Unit)? = null,
+)
+
+/** Trzy wskaźniki podsystemów — wspólne dane dla kolumny i paska. */
 @Composable
-fun IndicatorRail(
-    status: SystemStatus,
-    onTapGnss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun indicatorSpecs(status: SystemStatus, onTapGnss: () -> Unit): List<IndicatorSpec> {
     val p = Theme.palette
     val temp = status.battery.temperatureC
 
-    Column(
-        modifier.width(68.dp),
-        // Rozłożone tak samo jak kolumna odczytów obok — wskaźniki i liczby
-        // stoją w tym samym rytmie pionowym, zamiast dryfować względem siebie.
-        verticalArrangement = Arrangement.SpaceEvenly,
-    ) {
-        Indicator(
+    // Przegrzanie wypiera procenty. Telefon gotujący się na słońcu to realna
+    // awaria: najpierw dławi taktowanie, potem system ubija aplikację.
+    // Rozładowanie da się przewidzieć, przegrzanie przychodzi znienacka,
+    // więc ma pierwszeństwo.
+    val overheating = temp != null && temp >= TEMP_WARN
+
+    return listOf(
+        IndicatorSpec(
             tag = "GPS",
             level = status.gnss.level,
             readout = if (status.gnss.hasFix) {
@@ -61,10 +67,9 @@ fun IndicatorRail(
                 "----"
             },
             tint = if (status.gnss.hasFix) p.phosphor else p.amber,
-            modifier = Modifier.tap(onTapGnss),
-        )
-
-        Indicator(
+            onTap = onTapGnss,
+        ),
+        IndicatorSpec(
             tag = "GSM",
             level = status.cellular.level.coerceAtLeast(0),
             readout = status.cellular.dbm?.toString() ?: "----",
@@ -73,17 +78,10 @@ fun IndicatorRail(
                 status.cellular.level <= 1 -> p.amber
                 else -> p.phosphor
             },
-        )
-
-        // Przegrzanie wypiera procenty. Telefon gotujący się na słońcu
-        // w uchwycie to realna awaria: najpierw dławi taktowanie, potem
-        // system ubija aplikację. Rozładowanie da się przewidzieć,
-        // przegrzanie przychodzi znienacka, więc ma pierwszeństwo.
-        val overheating = temp != null && temp >= TEMP_WARN
-
-        Indicator(
+        ),
+        IndicatorSpec(
             tag = if (overheating) "TMP" else "PWR",
-            level = if (overheating) thermalLevel(temp) else status.battery.level,
+            level = if (overheating) thermalLevel(temp!!) else status.battery.level,
             readout = when {
                 overheating -> "%.0f\u00B0".format(temp)
                 status.battery.percent >= 0 -> "${status.battery.percent}%"
@@ -96,8 +94,55 @@ fun IndicatorRail(
                 status.battery.level <= 1 -> p.amber
                 else -> p.phosphor
             },
-        )
+        ),
+    )
+}
+
+/** Wskaźniki w kolumnie — na lewą krawędź panelu. */
+@Composable
+fun IndicatorRail(
+    status: SystemStatus,
+    onTapGnss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier.width(68.dp),
+        verticalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        indicatorSpecs(status, onTapGnss).forEach { it.Draw(Modifier) }
     }
+}
+
+/**
+ * Wskaźniki w jednym rzędzie, na całą szerokość.
+ *
+ * Przy siatce komórek po dwie w rzędzie (układ z fazy 1) kolumna z lewej
+ * zabierałaby szerokość liczbom — dlatego wskaźniki idą w pasek nad nimi.
+ */
+@Composable
+fun IndicatorStrip(
+    status: SystemStatus,
+    onTapGnss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        indicatorSpecs(status, onTapGnss).forEach { it.Draw(Modifier.weight(1f), compact = true) }
+    }
+}
+
+@Composable
+private fun IndicatorSpec.Draw(modifier: Modifier, compact: Boolean = false) {
+    Indicator(
+        tag = tag,
+        level = level,
+        readout = readout,
+        tint = tint,
+        compact = compact,
+        modifier = onTap?.let { modifier.tap(it) } ?: modifier,
+    )
 }
 
 /** Im goręcej, tym więcej segmentów — odwrotnie niż przy baterii. */
@@ -115,19 +160,38 @@ private fun Indicator(
     readout: String,
     tint: Color,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     val p = Theme.palette
 
     Column(modifier.fillMaxWidth()) {
-        Label(tag, color = p.dim, softWrap = false)
+        // W pasku etykieta i odczyt stoją w jednej linii — pasek ma być
+        // niski, bo wysokość ekranu idzie na liczby.
+        if (compact) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Label(tag, color = p.dim, softWrap = false)
+                Text(
+                    text = readout,
+                    color = tint,
+                    fontFamily = Type.Readout,
+                    fontSize = gridSp(Grid.UNIT),
+                    maxLines = 1,
+                )
+            }
+        } else {
+            Label(tag, color = p.dim, softWrap = false)
 
-        Text(
-            text = readout,
-            color = tint,
-            fontFamily = Type.Readout,
-            fontSize = gridSp(Grid.UNIT),
-            modifier = Modifier.padding(top = 2.dp),
-        )
+            Text(
+                text = readout,
+                color = tint,
+                fontFamily = Type.Readout,
+                fontSize = gridSp(Grid.UNIT),
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
 
         Row(
             Modifier
@@ -237,13 +301,15 @@ private fun DetailRow(
             .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Label(label, color = p.dim, modifier = Modifier.width(58.dp), softWrap = false)
+        // Szerokość w znakach, nie w dp: czcionka skaluje się z szerokością
+        // ekranu, a stałe 58 dp ucinało "ZASIL." i sklejało je z wartością.
+        Label(label.padEnd(7), color = p.dim, softWrap = false)
 
         Text(
             text = value,
             color = valueColor,
             fontFamily = Type.Readout,
-            fontSize = gridSp(22),
+            fontSize = gridSp(Grid.VALUE_SMALL),
         )
 
         Label(

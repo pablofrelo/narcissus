@@ -48,10 +48,15 @@ class TelemetryEngine(
 
     /**
      * Tempo z samego dopplera skacze co sekundę o kilkanaście sekund na
-     * kilometrze — przy bieganiu nieczytelne. Pokazujemy tempo z dystansu
-     * przebytego w ostatnich [PACE_WINDOW_MS], więc cyfra się uspokaja.
+     * kilometrze — przy bieganiu nieczytelne. Pokazujemy średnią prędkość
+     * z dopplera z ostatnich [PACE_WINDOW_MS].
+     *
+     * NIE z dystansu: dystans rośnie skokami po min. 3 m (zaczepienie),
+     * a w 20 s marszu to ledwie kilka skoków — jeden więcej albo mniej
+     * i tempo lata między 6 a 20 min/km. Spacer 29.09: z dystansu
+     * p5–p95 = 6,5–15,4 min/km, ze średniego dopplera 11,7–15,2.
      */
-    private val paceWindow = ArrayDeque<Pair<Long, Double>>()
+    private val paceWindow = ArrayDeque<Pair<Long, Float>>()
 
     /** Bieżący kilometr: numer, dystans i czas ruchu w chwili jego rozpoczęcia. */
     private var lapIndex = 1
@@ -185,8 +190,10 @@ class TelemetryEngine(
 
         closeLaps(distBefore, movingBefore)
 
-        paceWindow.addLast(nowMs to distanceM)
-        while (paceWindow.size > 2 && nowMs - paceWindow.first().first > PACE_WINDOW_MS) {
+        paceWindow.addLast(nowMs to speed)
+        // Wszystko starsze niż okno wylatuje — także ostatni fix sprzed
+        // dziury w sygnale, żeby nie wchodził do średniej.
+        while (nowMs - paceWindow.first().first > PACE_WINDOW_MS) {
             paceWindow.removeFirst()
         }
 
@@ -210,13 +217,15 @@ class TelemetryEngine(
         }
     }
 
-    /** Tempo z ostatnich sekund; 0 na postoju. */
+    /**
+     * Średnia prędkość z okna; 0 na postoju. Po starcie i po dziurze
+     * w sygnale czekamy, aż okno obejmie [PACE_MIN_SPAN_MS] — z dwóch,
+     * trzech fixów średnia jeszcze skacze.
+     */
     private fun smoothSpeed(moving: Boolean): Float {
         if (!moving || paceWindow.size < 2) return 0f
-        val (t0, d0) = paceWindow.first()
-        val (t1, d1) = paceWindow.last()
-        val dt = (t1 - t0) / 1000.0
-        return if (dt >= 3.0) ((d1 - d0) / dt).toFloat() else 0f
+        if (paceWindow.last().first - paceWindow.first().first < PACE_MIN_SPAN_MS) return 0f
+        return paceWindow.sumOf { it.second.toDouble() }.toFloat() / paceWindow.size
     }
 
     /**
@@ -292,6 +301,9 @@ class TelemetryEngine(
 
         /** Okno wygładzania tempa. Krócej skacze, dłużej spóźnia się na zmiany. */
         private const val PACE_WINDOW_MS = 20_000L
+
+        /** Minimalna rozpiętość okna, zanim pokażemy tempo. */
+        private const val PACE_MIN_SPAN_MS = 10_000L
 
         /** Od tylu metrów kilometra jego tempo liczy się z niego samego. */
         private const val LAP_MIN_M = 100.0
