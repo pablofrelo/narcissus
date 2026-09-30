@@ -40,6 +40,10 @@ class TelemetryEngine(
     private var movingMs = 0L
     private var maxSpeedMps = 0f
 
+    /** Tempo średnie pokazywane na ekranie, odświeżane co [AVG_PACE_HOLD_MS]. */
+    private var avgPaceHeld = 0f
+    private var avgPaceHeldAt = 0L
+
     private var accepted = 0
     private var rejected = 0
 
@@ -83,6 +87,8 @@ class TelemetryEngine(
         distanceM = 0.0
         movingMs = 0L
         maxSpeedMps = 0f
+        avgPaceHeld = 0f
+        avgPaceHeldAt = 0L
         accepted = 0
         rejected = 0
         stepsAtStart = null
@@ -266,12 +272,19 @@ class TelemetryEngine(
         val movingS = movingMs / 1000.0
         val smooth = smoothSpeed(lastMoving)
 
+        val avg = if (movingS > 0) (distanceM / movingS).toFloat() else 0f
+        if (avgPaceHeldAt == 0L || nowMs - avgPaceHeldAt >= AVG_PACE_HOLD_MS) {
+            avgPaceHeld = avg
+            avgPaceHeldAt = nowMs
+        }
+
         return Telemetry(
             distanceM = distanceM,
             elapsedMs = nowMs - startedAt,
             movingMs = movingMs,
             speedMps = if (moving) speed else 0f,
-            avgMovingSpeedMps = if (movingS > 0) (distanceM / movingS).toFloat() else 0f,
+            avgMovingSpeedMps = avg,
+            avgPaceSpeedMps = avgPaceHeld,
             maxSpeedMps = maxSpeedMps,
             paceSpeedMps = smooth,
             lapIndex = lapIndex,
@@ -301,6 +314,9 @@ class TelemetryEngine(
 
         /** Okno wygładzania tempa. Krócej skacze, dłużej spóźnia się na zmiany. */
         private const val PACE_WINDOW_MS = 20_000L
+
+        /** Co ile odświeżamy tempo średnie na ekranie. */
+        private const val AVG_PACE_HOLD_MS = 15_000L
 
         /** Minimalna rozpiętość okna, zanim pokażemy tempo. */
         private const val PACE_MIN_SPAN_MS = 10_000L

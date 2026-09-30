@@ -127,7 +127,9 @@ fun Readout(
         Label(metric.labelOf?.invoke(telemetry) ?: metric.label.text, color = p.phosphor, softWrap = false)
 
         Text(
-            text = metric.read(telemetry),
+            // Spacje z formatów o stałej szerokości zbędne przy wyrównaniu do
+            // prawej, a przy wielkiej cyfrze wypychały ją poza ekran.
+            text = metric.read(telemetry).trimStart(),
             color = p.readout,
             fontFamily = Type.forSize(valueSize),
             fontSize = gridSp(valueSize),

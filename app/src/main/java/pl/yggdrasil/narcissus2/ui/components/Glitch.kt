@@ -24,10 +24,10 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Zakłócenie jak na starym monitorze: co 45–90 s na pół sekundy kilka
+ * Zakłócenie jak na starym monitorze: co 45–90 s na dwie sekundy kilka
  * poziomych pasów obrazu szarpie w bok, a przez ekran przejeżdża jasny pas.
  *
- * To OZDOBA, nie ochrona matrycy — pół sekundy na minutę nie zmienia tego,
+ * To OZDOBA, nie ochrona matrycy — dwie sekundy na minutę nie zmieniają tego,
  * ile świeci każdy piksel. Przed wypaleniem chroni [burnInPadding].
  */
 @Composable
@@ -85,8 +85,8 @@ fun Modifier.crtGlitch(tint: Color): Modifier {
     }
 }
 
-private const val DURATION_MS = 450
+private const val DURATION_MS = 2_000
 private const val BANDS = 5
 
 /** Ile razy w trakcie jednego zakłócenia pasy zmieniają położenie. */
-private const val JUMPS = 9
+private const val JUMPS = 24

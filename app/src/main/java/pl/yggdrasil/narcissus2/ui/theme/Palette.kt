@@ -56,6 +56,8 @@ val NostromoPalette = Palette(
 object Grid {
     /** Wielka cyfra, wariant 32×64. */
     const val READOUT = 352
+    /** Liczby w wierszach pod wielką cyfrą. */
+    const val ROW = 192
     /** Liczby w komórkach. */
     const val VALUE = 128
     /** Przyciski. */

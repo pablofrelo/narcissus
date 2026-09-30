@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,8 +36,8 @@ import pl.yggdrasil.narcissus2.ui.theme.Theme
  * Ekran nie wie nic o trybach.
  *
  * Bierze listę metryk z [ActivityMode]. W trybach z [ActivityMode.hero]
- * pierwsza metryka idzie na wielką cyfrę, reszta — i wszystkie w trybie
- * bez hero — w komórki po dwie w rzędzie, jak w fazie 1. Zmiana zestawu
+ * pierwsza metryka idzie na wielką cyfrę, reszta — po jednej w wierszu.
+ * Zmiana zestawu
  * odczytów to zmiana listy w enumie, nie zmiana tego pliku.
  */
 @Composable
@@ -143,21 +142,15 @@ fun TrackingScreen(
                 }
             }
 
-            // --- komórki po dwie w rzędzie ---
-            Panel {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    metrics.drop(if (hero) 1 else 0).chunked(2).forEach { row ->
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            row.forEach { metric ->
-                                Readout(metric, state.telemetry, Modifier.weight(1f))
-                            }
-                            // Nieparzysta liczba metryk: pusta komórka trzyma
-                            // szerokość, żeby ostatnia nie rozjechała się na cały rząd.
-                            if (row.size == 1) Spacer(Modifier.weight(1f))
-                        }
+            // --- reszta: po jednej metryce w wierszu ---
+            // Dwie w rzędzie sklejały się, gdy czas dobijał do godzin.
+            Panel(alignment = Alignment.End) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    metrics.drop(if (hero) 1 else 0).forEach { metric ->
+                        Readout(metric, state.telemetry, valueSize = Grid.ROW)
                     }
                 }
             }

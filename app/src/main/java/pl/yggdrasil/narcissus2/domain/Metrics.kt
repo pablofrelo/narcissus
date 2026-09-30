@@ -28,6 +28,8 @@ data class Telemetry(
     /** Prędkość wygładzona z ostatnich sekund — źródło tempa na ekranie. */
     val paceSpeedMps: Float = 0f,
     val avgMovingSpeedMps: Float = 0f,
+    /** Jak [avgMovingSpeedMps], ale odświeżana co 15 s — źródło tempa średniego. */
+    val avgPaceSpeedMps: Float = 0f,
     /** Numer bieżącego kilometra, liczony od 1. */
     val lapIndex: Int = 1,
     /** Średnia prędkość w bieżącym kilometrze (czas ruchu). */
@@ -92,8 +94,9 @@ object Metrics {
         formatPace(it.lapSpeedMps)
     }
 
+    /** Odświeżane co 15 s — przy każdym fixie drgałoby o sekundy. */
     val AvgPace = Metric("avgpace", Txt("AVG PACE", "TEMPO ŚR."), Txt("MIN/KM")) {
-        formatPace(it.avgMovingSpeedMps)
+        formatPace(it.avgPaceSpeedMps)
     }
 
     val Elapsed = Metric("time", Txt("TIME", "CZAS"), Txt("")) {
@@ -154,11 +157,7 @@ enum class ActivityMode(
     val label: Txt,
     val usesStepSensor: Boolean,
     val thresholds: Thresholds,
-    /**
-     * Czy pierwsza metryka idzie na duży wyświetlacz. Rower tak — telefon
-     * wisi na kierownicy, pół metra od oczu. W biegu telefon jest w ręce,
-     * więc wszystkie odczyty mają jeden, średni rozmiar.
-     */
+    /** Czy pierwsza metryka idzie na duży wyświetlacz. */
     val hero: Boolean,
     /** Kolejność ma znaczenie: przy [hero] pierwsza metryka trafia na duży wyświetlacz. */
     val metrics: List<Metric>,
@@ -174,8 +173,6 @@ enum class ActivityMode(
             Metrics.Speed,
             Metrics.Distance,
             Metrics.Elapsed,
-            Metrics.AvgSpeed,
-            Metrics.MaxSpeed,
         ),
     ),
 
@@ -183,12 +180,11 @@ enum class ActivityMode(
         label = Txt("RUN", "BIEG"),
         usesStepSensor = true,
         thresholds = Thresholds(maxAccuracyM = 20f, minSpeedMps = 0.8f, maxSpeedMps = 8f),
-        hero = false,
+        hero = true,
         metrics = listOf(
             Metrics.Distance,
-            Metrics.LapPace,
+            Metrics.Elapsed,
             Metrics.AvgPace,
-            Metrics.Cadence,
         ),
     ),
 
@@ -198,12 +194,9 @@ enum class ActivityMode(
         thresholds = Thresholds(maxAccuracyM = 15f, minSpeedMps = 0.4f, maxSpeedMps = 3f),
         hero = true,
         metrics = listOf(
-            Metrics.Pace,
-            Metrics.Distance,
-            Metrics.Elapsed,
-            Metrics.AvgPace,
             Metrics.Steps,
-            Metrics.Fixes,
+            Metrics.Elapsed,
+            Metrics.Distance,
         ),
     ),
 }
