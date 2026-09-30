@@ -18,11 +18,13 @@ import android.telephony.TelephonyManager
 import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
 
 /**
  * Trzy niezależne źródła scalone w jeden strumień.
@@ -188,36 +190,53 @@ class SystemMonitor(private val context: Context) {
      * na zmianę stanu.
      */
     private fun battery(): Flow<SystemStatus.Battery> = callbackFlow {
+        val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+
+        fun push(intent: Intent?) {
+            parseBattery(intent)?.let { trySend(it) }
+        }
+
         val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                if (intent == null) return
+            override fun onReceive(ctx: Context?, intent: Intent?) = push(intent)
+        }
 
-                val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-                val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-                val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-                val tenths = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+        // Wartość startową bierzemy z tego, co ZWRACA rejestracja (ostatni
+        // sticky broadcast), zamiast czekać, aż system doręczy go do
+        // onReceive. To doręczenie potrafiło nie przyjść, a następny
+        // broadcast leci dopiero przy zmianie o 1% — przez ten czas "---".
+        push(ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED))
 
-                trySend(
-                    SystemStatus.Battery(
-                        percent = if (level >= 0 && scale > 0) level * 100 / scale else -1,
-                        charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                            status == BatteryManager.BATTERY_STATUS_FULL,
-                        temperatureC = if (tenths == Int.MIN_VALUE) null else tenths / 10f,
-                    ),
-                )
+        // Bezpiecznik: co pół minuty świeży odczyt, gdyby broadcast zginął.
+        val poll = launch {
+            while (true) {
+                delay(30_000)
+                push(ContextCompat.registerReceiver(context, null, filter, ContextCompat.RECEIVER_NOT_EXPORTED))
             }
         }
 
-        ContextCompat.registerReceiver(
-            context,
-            receiver,
-            IntentFilter(Intent.ACTION_BATTERY_CHANGED),
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
-
         awaitClose {
+            poll.cancel()
             runCatching { context.unregisterReceiver(receiver) }
         }
+    }
+
+    private fun parseBattery(intent: Intent?): SystemStatus.Battery? {
+        if (intent == null) return null
+
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        val tenths = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+
+        // Niepełny broadcast nie może skasować poprawnego odczytu.
+        if (level < 0 || scale <= 0) return null
+
+        return SystemStatus.Battery(
+            percent = level * 100 / scale,
+            charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                status == BatteryManager.BATTERY_STATUS_FULL,
+            temperatureC = if (tenths == Int.MIN_VALUE) null else tenths / 10f,
+        )
     }
 
     private fun granted(name: String): Boolean =
