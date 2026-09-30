@@ -83,17 +83,23 @@ fun TrackingScreen(
             ) {
                 // Tryb widać w selektorze niżej; w nagłówku "PIESZO" + "DZIENNIK"
                 // nie mieściło się w jednej linii.
-                Label("NARCISSUS", color = p.dim, softWrap = false)
+                // Przełącznik języka przyklejony do stałego "NARCISSUS" po lewej.
+                // Między nim a DZIENNIK/LOG pływał, bo te mają różną długość.
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Label("NARCISSUS", color = p.dim, softWrap = false)
+
+                    if (!state.active) {
+                        // Pokazuje BIEŻĄCY język; dotknięcie przełącza.
+                        Label(
+                            if (Lang.polish) "[PL]" else "[EN]",
+                            color = p.dim,
+                            softWrap = false,
+                            modifier = Modifier.tap(Lang::toggle),
+                        )
+                    }
+                }
 
                 if (!state.active) {
-                    // Pokazuje BIEŻĄCY język; dotknięcie przełącza.
-                    Label(
-                        if (Lang.polish) "[PL]" else "[EN]",
-                        color = p.dim,
-                        softWrap = false,
-                        modifier = Modifier.tap(Lang::toggle),
-                    )
-
                     Label(
                         tr("LOG", "DZIENNIK"),
                         color = p.phosphor,
