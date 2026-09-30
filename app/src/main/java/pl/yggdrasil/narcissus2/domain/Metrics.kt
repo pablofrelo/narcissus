@@ -183,8 +183,8 @@ enum class ActivityMode(
         hero = true,
         metrics = listOf(
             Metrics.Distance,
-            Metrics.Elapsed,
             Metrics.AvgPace,
+            Metrics.Elapsed,
         ),
     ),
 
@@ -195,8 +195,8 @@ enum class ActivityMode(
         hero = true,
         metrics = listOf(
             Metrics.Steps,
-            Metrics.Elapsed,
             Metrics.Distance,
+            Metrics.Elapsed,
         ),
     ),
 }

@@ -137,9 +137,9 @@ fun Readout(
             softWrap = false,
         )
 
-        if (metric.unit.text.isNotEmpty()) {
-            Label(metric.unit.text, color = p.dim, size = Grid.UNIT, softWrap = false)
-        }
+        // Wiersz jednostki zawsze, choćby pusty — inaczej odczyt bez jednostki
+        // (kroki, czas) jest niższy i układ podskakuje przy zmianie trybu.
+        Label(metric.unit.text.ifEmpty { " " }, color = p.dim, size = Grid.UNIT, softWrap = false)
     }
 }
 
