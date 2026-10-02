@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// Klucz do podpisu wydania leży poza repo: keystore.properties w katalogu
+// projektu (jest w .gitignore) z samą ścieżką i aliasem. Hasło NIE w pliku,
+// tylko w zmiennej NARCISSUS_KEY_PASS na czas buildu. Bez pliku release
+// buduje się niepodpisany.
+val keystoreFile = rootProject.file("keystore.properties")
+val keystore = Properties().apply { if (keystoreFile.exists()) keystoreFile.inputStream().use(::load) }
 
 android {
     namespace = "pl.yggdrasil.narcissus2"
@@ -11,12 +20,26 @@ android {
         applicationId = "pl.yggdrasil.narcissus2"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keystoreFile.exists()) {
+                storeFile = file(keystore.getProperty("storeFile"))
+                keyAlias = keystore.getProperty("keyAlias")
+                val pass = System.getenv("NARCISSUS_KEY_PASS")
+                    ?: error("Brak NARCISSUS_KEY_PASS — hasło do klucza wydania")
+                storePassword = pass
+                keyPassword = pass
+            }
+        }
     }
 
     buildTypes {
         release {
+            if (keystoreFile.exists()) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
