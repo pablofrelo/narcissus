@@ -50,7 +50,11 @@ def _cache():
 
 def height(lon: float, lat: float) -> float | None:
     """Wysokość terenu dla punktu WGS84. None, gdy usługa nie odpowiada."""
-    x, y = _to_pl.transform(lon, lat)
+    # UWAGA: w polskiej geodezji x to PÓŁNOC, y to WSCHÓD — odwrotnie niż
+    # w GIS-ie. pyproj (always_xy) zwraca (wschód, północ). Do 02.10 szło
+    # odwrotnie i GUGiK podawał wysokość zupełnie innego miejsca w Polsce.
+    east, north = _to_pl.transform(lon, lat)
+    x, y = north, east
 
     # Klucz cache zaokrąglony do metra — siatka NMT i tak ma metr,
     # a te same trasy przejeżdża się wielokrotnie.
