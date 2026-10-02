@@ -176,7 +176,9 @@ class TelemetryEngine(
         val movingBefore = movingMs
         if (moving) {
             movingMs += dtMs
-            if (speed > maxSpeedMps) maxSpeedMps = speed
+            // Pojedynczy skok dopplera (spacer 02.10: 11,2 km/h w jednej sekundzie)
+            // nie może zostać maksimum — powyżej limitu trybu to szum, nie ruch.
+            if (speed > maxSpeedMps && speed <= mode.thresholds.maxSpeedMps) maxSpeedMps = speed
         }
         val distBefore = distanceM
 
