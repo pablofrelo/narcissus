@@ -17,7 +17,8 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "pl.yggdrasil.narcissus2"
+        // Identyfikator w sklepach. Pakiet kodu (namespace) zostaje pl.yggdrasil.narcissus2.
+        applicationId = "io.github.pablofrelo.narcissus"
         minSdk = 30
         targetSdk = 36
         versionCode = 2
