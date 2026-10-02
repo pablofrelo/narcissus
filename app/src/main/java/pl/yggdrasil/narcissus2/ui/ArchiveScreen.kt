@@ -1,5 +1,9 @@
 package pl.yggdrasil.narcissus2.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -17,13 +21,33 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import pl.yggdrasil.narcissus2.domain.Session
 import pl.yggdrasil.narcissus2.i18n.tr
+import pl.yggdrasil.narcissus2.share.StoryCard
 import pl.yggdrasil.narcissus2.ui.components.Label
 import pl.yggdrasil.narcissus2.ui.components.Panel
 import pl.yggdrasil.narcissus2.ui.components.TrackView
@@ -32,23 +56,6 @@ import pl.yggdrasil.narcissus2.ui.theme.Grid
 import pl.yggdrasil.narcissus2.ui.theme.Theme
 import pl.yggdrasil.narcissus2.ui.theme.Type
 import pl.yggdrasil.narcissus2.ui.theme.gridSp
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import pl.yggdrasil.narcissus2.share.StoryCard
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 private val DATE = DateTimeFormatter.ofPattern("dd.MM.yy HH:mm").withZone(ZoneId.systemDefault())
 
@@ -63,9 +70,11 @@ fun ArchiveScreen(
     onConfirmDelete: (String) -> Unit,
     onSync: () -> Unit,
     onDeleteTests: () -> Unit,
+    onServerUrl: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = Theme.palette
+    var editingServer by remember { mutableStateOf(false) }
 
     Column(
         modifier
@@ -90,11 +99,20 @@ fun ArchiveScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (opened == null) {
                     Label(
-                        if (state.syncing) "[SYNC...]" else "[SYNC]",
-                        color = if (state.syncing) p.amber else p.phosphor,
+                        "[SRV]",
+                        color = if (editingServer) p.phosphor else p.dim,
                         softWrap = false,
-                        modifier = Modifier.tap { if (!state.syncing) onSync() },
+                        modifier = Modifier.tap { editingServer = !editingServer },
                     )
+
+                    if (state.serverUrl.isNotBlank()) {
+                        Label(
+                            if (state.syncing) "[SYNC...]" else "[SYNC]",
+                            color = if (state.syncing) p.amber else p.phosphor,
+                            softWrap = false,
+                            modifier = Modifier.tap { if (!state.syncing) onSync() },
+                        )
+                    }
                 }
 
                 Label(
@@ -103,6 +121,13 @@ fun ArchiveScreen(
                     softWrap = false,
                     modifier = Modifier.tap { if (opened == null) onBack() else onClose() },
                 )
+            }
+        }
+
+        if (editingServer && opened == null) {
+            ServerField(state.serverUrl) {
+                onServerUrl(it)
+                editingServer = false
             }
         }
 
@@ -475,4 +500,44 @@ private fun Stat(label: String, value: String, unit: String) {
 private fun clock(ms: Long): String {
     val s = ms / 1000
     return "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60)
+}
+
+/**
+ * Adres serwera synchronizacji. Pusty = sync wyłączony.
+ * Zapis przyciskiem albo "Gotowe" na klawiaturze.
+ */
+@Composable
+private fun ServerField(current: String, onSave: (String) -> Unit) {
+    val p = Theme.palette
+    var text by remember { mutableStateOf(current) }
+
+    Panel {
+        Label(tr("SYNC SERVER (EMPTY = OFF)", "SERWER SYNC (PUSTY = WYŁ.)"), color = p.dim, softWrap = false)
+
+        BasicTextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            textStyle = TextStyle(
+                color = p.readout,
+                fontFamily = Type.Readout,
+                fontSize = gridSp(Grid.VALUE_SMALL),
+            ),
+            cursorBrush = SolidColor(p.phosphor),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onSave(text) }),
+            decorationBox = { inner ->
+                if (text.isEmpty()) Label("http://10.0.0.1:8765", color = p.dim.copy(alpha = 0.5f), softWrap = false)
+                inner()
+            },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        )
+
+        Label(
+            tr("[SAVE]", "[ZAPISZ]"),
+            color = p.phosphor,
+            softWrap = false,
+            modifier = Modifier.align(Alignment.End).tap { onSave(text) },
+        )
+    }
 }

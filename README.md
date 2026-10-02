@@ -41,13 +41,11 @@ publicly.
     cd server
     docker compose up -d
 
-The app talks to it over plain HTTP. The address `10.8.0.1:8765` appears
-in three places; change all of them to your own:
-
-- `server/compose.yml` (bind address)
-- `app/src/main/java/pl/yggdrasil/narcissus2/data/SyncSettings.kt` (`DEFAULT_URL`)
-- `app/src/main/res/xml/network_security_config.xml` (the only host allowed
-  to use cleartext)
+Then in the app open **LOG → [SRV]**, enter the server address (e.g.
+`http://10.0.0.1:8765`) and save. With the field empty, sync is off and the
+app works fully offline. The app talks to the server over plain HTTP, which
+is fine inside an encrypted tunnel; change the bind address in
+`server/compose.yml` to your own network.
 
 ## Building
 

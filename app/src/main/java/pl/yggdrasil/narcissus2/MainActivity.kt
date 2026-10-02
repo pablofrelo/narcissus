@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
                                 onConfirmDelete = archive::confirmDelete,
                                 onSync = archive::runSync,
                                 onDeleteTests = archive::deleteAllTest,
+                                onServerUrl = archive::setServerUrl,
                             )
                         }
                     }

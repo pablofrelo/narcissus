@@ -40,13 +40,11 @@ i to ona jest granicą zaufania. Nie wystawiaj go publicznie.
     cd server
     docker compose up -d
 
-Aplikacja łączy się z nim po zwykłym HTTP. Adres `10.8.0.1:8765` występuje
-w trzech miejscach, zmień wszystkie na swój:
-
-- `server/compose.yml` (adres nasłuchu)
-- `app/src/main/java/pl/yggdrasil/narcissus2/data/SyncSettings.kt` (`DEFAULT_URL`)
-- `app/src/main/res/xml/network_security_config.xml` (jedyny host, dla
-  którego dozwolony jest ruch nieszyfrowany)
+Potem w aplikacji **DZIENNIK → [SRV]**: wpisz adres serwera (np.
+`http://10.0.0.1:8765`) i zapisz. Z pustym polem sync jest wyłączony,
+a aplikacja działa w pełni bez sieci. Połączenie idzie po zwykłym HTTP,
+co jest w porządku wewnątrz szyfrowanego tunelu; adres nasłuchu zmień
+w `server/compose.yml` na swoją sieć.
 
 ## Budowanie
 

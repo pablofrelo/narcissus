@@ -12,9 +12,9 @@ class SyncSettings(context: Context) {
     private val prefs = context.getSharedPreferences("sync", Context.MODE_PRIVATE)
 
     /**
-     * Adres serwera w meshu WireGuard. Poza meshem nieosiągalny i to jest
-     * cecha, nie wada — nie ma tu żadnego uwierzytelniania, bo sam mesh
-     * pełni tę rolę.
+     * Adres serwera synchronizacji, wpisywany w dzienniku. Pusty = sync
+     * wyłączony. Serwer nie ma uwierzytelniania, więc powinien stać w sieci
+     * prywatnej (np. WireGuard), która pełni tę rolę.
      */
     var serverUrl: String
         get() = prefs.getString("url", DEFAULT_URL) ?: DEFAULT_URL
@@ -34,6 +34,6 @@ class SyncSettings(context: Context) {
         set(v) = prefs.edit().putLong("lastSync3", v).apply()
 
     companion object {
-        const val DEFAULT_URL = "http://10.8.0.1:8765"
+        const val DEFAULT_URL = ""
     }
 }

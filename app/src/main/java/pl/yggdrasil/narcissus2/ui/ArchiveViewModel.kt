@@ -48,14 +48,21 @@ class ArchiveViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Ręczna synchronizacja z heimdallem.
+     * Ręczna synchronizacja z serwerem.
      *
      * Świadomie ręczna, nie automatyczna: serwer jest osiągalny wyłącznie
      * w meshu WireGuard, więc automat próbowałby i zawodził za każdym razem,
      * gdy jesteś poza domem — czyli dokładnie wtedy, gdy jeździsz.
      */
+    /** Nowy serwer = pełna wymiana od zera, bo znacznik "since" był od starego. */
+    fun setServerUrl(url: String) {
+        settings.serverUrl = url.trim()
+        settings.lastSyncAt = 0L
+        _state.update { it.copy(serverUrl = settings.serverUrl, syncMessage = null, syncFailed = false) }
+    }
+
     fun runSync() {
-        if (_state.value.syncing) return
+        if (_state.value.syncing || _state.value.serverUrl.isBlank()) return
 
         viewModelScope.launch {
             _state.update { it.copy(syncing = true, syncMessage = null, syncFailed = false) }
