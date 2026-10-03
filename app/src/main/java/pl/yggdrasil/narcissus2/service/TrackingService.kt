@@ -139,6 +139,9 @@ class TrackingService : LifecycleService() {
             .setContentIntent(open)
             .setOngoing(true)
             .setSilent(true)
+            // Dystans i czas widoczne też na ekranie blokady.
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setCategory(NotificationCompat.CATEGORY_WORKOUT)
             .build()
     }
 
