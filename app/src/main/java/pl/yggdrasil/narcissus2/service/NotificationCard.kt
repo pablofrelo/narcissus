@@ -25,15 +25,15 @@ object NotificationCard {
 
     /** Zwinięte: jeden rząd, wszystkie metryki obok siebie. */
     fun compact(context: Context, mode: ActivityMode, t: Telemetry): Bitmap =
-        render(context, mode, t, height = 150, valueSize = 72f, labelSize = 28f)
+        render(context, mode, t, height = 150, valueSize = 84f, labelSize = 42f, units = false)
 
     /** Rozwinięte: to samo, większe cyfry. */
     fun expanded(context: Context, mode: ActivityMode, t: Telemetry): Bitmap =
-        render(context, mode, t, height = 300, valueSize = 128f, labelSize = 36f)
+        render(context, mode, t, height = 300, valueSize = 140f, labelSize = 48f, units = true)
 
     private fun render(
         context: Context, mode: ActivityMode, t: Telemetry,
-        height: Int, valueSize: Float, labelSize: Float,
+        height: Int, valueSize: Float, labelSize: Float, units: Boolean,
     ): Bitmap {
         val out = Bitmap.createBitmap(WIDTH, height, Bitmap.Config.ARGB_8888)
         val c = Canvas(out)
@@ -57,19 +57,11 @@ object NotificationCard {
         metrics.forEachIndexed { i, m ->
             val x = col * i + col / 2f
             val unit = m.unit.text
-            val head = if (unit.isEmpty()) m.label.text else "${m.label.text} $unit"
-            c.drawText(head, x, labelY, label)
-            // Pomniejsz wartość, gdyby nie zmieściła się w kolumnie.
-            val text = m.read(t).trimStart()
-            val w = value.measureText(text)
-            if (w > col * 0.94f) {
-                val keep = value.textSize
-                value.textSize = keep * col * 0.94f / w
-                c.drawText(text, x, valueY, value)
-                value.textSize = keep
-            } else {
-                c.drawText(text, x, valueY, value)
-            }
+            // Zwinięte: sama etykieta, większa — system zmniejsza obrazek do
+            // wysokości paska i jednostki robiły z etykiet drobny druk.
+            val head = if (!units || unit.isEmpty()) m.label.text else "${m.label.text} $unit"
+            fitText(c, head, x, labelY, label, col)
+            fitText(c, m.read(t).trimStart(), x, valueY, value, col)
         }
 
         // Scanlines: linia na 3 piksele, czerń 28%.
@@ -78,5 +70,14 @@ object NotificationCard {
         while (y < height) { c.drawRect(0f, y, WIDTH.toFloat(), y + 1f, line); y += 3f }
 
         return out
+    }
+
+    /** Tekst wyśrodkowany w kolumnie; pomniejszony, gdyby się nie zmieścił. */
+    private fun fitText(c: Canvas, text: String, x: Float, y: Float, paint: Paint, col: Float) {
+        val keep = paint.textSize
+        val w = paint.measureText(text)
+        if (w > col * 0.94f) paint.textSize = keep * col * 0.94f / w
+        c.drawText(text, x, y, paint)
+        paint.textSize = keep
     }
 }
