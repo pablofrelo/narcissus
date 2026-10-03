@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Powiadomienie to sam obrazek rysowany przez aplikację (NotificationCard),
+     bo w RemoteViews nie da się użyć własnej czcionki ani scanlines. -->
+<ImageView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/readout"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:adjustViewBounds="true"
+    android:contentDescription="@string/app_name"
+    android:scaleType="fitCenter" />

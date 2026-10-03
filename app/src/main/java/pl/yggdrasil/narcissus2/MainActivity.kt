@@ -11,7 +11,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,12 +79,6 @@ class MainActivity : ComponentActivity() {
             val archiveState by archive.state.collectAsStateWithLifecycle()
 
             var screen by remember { mutableStateOf(Screen.Tracking) }
-
-            // W trakcie sesji licznik pokazuje się NA ekranie blokady: wciskasz
-            // przycisk zasilania i od razu widzisz odczyty, bez odblokowania.
-            // Tylko w sesji — poza nią aplikacja nie ma czego pokazywać
-            // komuś, kto podniesie zablokowany telefon.
-            LaunchedEffect(state.active) { setShowWhenLocked(state.active) }
 
             // Kontroler musi wiedzieć, czy patrzysz na ekran. Bez aktywnej
             // sesji i bez widocznego okna nie ma powodu trzymać włączonego
