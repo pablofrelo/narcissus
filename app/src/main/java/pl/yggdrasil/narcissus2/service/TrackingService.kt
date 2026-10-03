@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.PowerManager
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 import pl.yggdrasil.narcissus2.MainActivity
 import pl.yggdrasil.narcissus2.NarcissusApp
 import pl.yggdrasil.narcissus2.R
+import pl.yggdrasil.narcissus2.i18n.Lang
 import pl.yggdrasil.narcissus2.system.LocationSource
 
 /**
@@ -61,7 +63,7 @@ class TrackingService : LifecycleService() {
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
-            notification("0.00 KM  0:00:00"),
+            notification(null),
             // Typ ZAWSZE location. Wcześniej tylko od Androida 14, a niżej 0 —
             // czyli serwis BEZ typu. Na Androidzie 11–13 (S20 FE, Moto G8)
             // aplikacja z uprawnieniem "podczas używania" dostaje pozycję
@@ -93,14 +95,12 @@ class TrackingService : LifecycleService() {
         lifecycleScope.launch {
             controller.state
                 .map { s ->
-                    val km = s.telemetry.distanceM / 1000.0
-                    val sec = s.telemetry.elapsedMs / 1000
-                    "%.2f KM  %d:%02d:%02d".format(
-                        km, sec / 3600, (sec % 3600) / 60, sec % 60,
-                    ) to s.active
+                    // Klucz z tego, co faktycznie widać — obrazek rysujemy
+                    // tylko, gdy zmieniła się któraś z wartości.
+                    Triple(s.mode.metrics.joinToString { it.read(s.telemetry) } + Lang.polish, s, s.active)
                 }
-                .distinctUntilChanged()
-                .collect { (text, active) ->
+                .distinctUntilChanged { a, b -> a.first == b.first && a.third == b.third }
+                .collect { (_, s, active) ->
                     if (!active) {
                         // Sesja zakończona z poziomu aplikacji — serwis
                         // nie ma już czego pilnować.
@@ -110,7 +110,7 @@ class TrackingService : LifecycleService() {
 
                     NarcissusApp.instance.notifications.notify(
                         NOTIFICATION_ID,
-                        notification(text),
+                        notification(s),
                     )
                 }
         }
@@ -124,7 +124,7 @@ class TrackingService : LifecycleService() {
         super.onDestroy()
     }
 
-    private fun notification(text: String): Notification {
+    private fun notification(s: TrackingController.State?): Notification {
         val open = PendingIntent.getActivity(
             this,
             0,
@@ -132,10 +132,24 @@ class TrackingService : LifecycleService() {
             PendingIntent.FLAG_IMMUTABLE,
         )
 
-        return NotificationCompat.Builder(this, NarcissusApp.CHANNEL_TRACKING)
+        val builder = NotificationCompat.Builder(this, NarcissusApp.CHANNEL_TRACKING)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+
+        if (s != null) {
+            val small = RemoteViews(packageName, R.layout.notification_readout).apply {
+                setImageViewBitmap(R.id.readout, NotificationCard.compact(this@TrackingService, s.mode, s.telemetry))
+            }
+            val big = RemoteViews(packageName, R.layout.notification_readout).apply {
+                setImageViewBitmap(R.id.readout, NotificationCard.expanded(this@TrackingService, s.mode, s.telemetry))
+            }
+            builder
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+                .setCustomContentView(small)
+                .setCustomBigContentView(big)
+        }
+
+        return builder
             .setContentIntent(open)
             .setOngoing(true)
             .setSilent(true)
