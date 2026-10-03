@@ -8,7 +8,7 @@ import android.graphics.Typeface
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.res.ResourcesCompat
 import pl.yggdrasil.narcissus2.R
-import pl.yggdrasil.narcissus2.domain.ActivityMode
+import pl.yggdrasil.narcissus2.domain.Metrics
 import pl.yggdrasil.narcissus2.domain.Telemetry
 import pl.yggdrasil.narcissus2.ui.theme.NostromoPalette
 
@@ -17,22 +17,24 @@ import pl.yggdrasil.narcissus2.ui.theme.NostromoPalette
  * fosfor, Spleen, scanlines — jak ekran licznika. Systemowe powiadomienie
  * umie tylko zwykły tekst.
  *
- * Te same metryki co na ekranie trybu, w tej samej kolejności.
+ * Tylko dystans i czas — przy trzech kolumnach cyfry na blokadzie były
+ * za drobne. Obrazek i tak skaluje się do wysokości paska, więc liczy się
+ * stosunek cyfr do wysokości: etykiety małe, cyfry jak największe.
  */
 object NotificationCard {
 
     private const val WIDTH = 1080
 
     /** Zwinięte: jeden rząd, wszystkie metryki obok siebie. */
-    fun compact(context: Context, mode: ActivityMode, t: Telemetry): Bitmap =
-        render(context, mode, t, height = 150, valueSize = 84f, labelSize = 42f, units = false)
+    fun compact(context: Context, t: Telemetry): Bitmap =
+        render(context, t, height = 150, valueSize = 108f, labelSize = 30f, units = false)
 
     /** Rozwinięte: to samo, większe cyfry. */
-    fun expanded(context: Context, mode: ActivityMode, t: Telemetry): Bitmap =
-        render(context, mode, t, height = 300, valueSize = 140f, labelSize = 48f, units = true)
+    fun expanded(context: Context, t: Telemetry): Bitmap =
+        render(context, t, height = 300, valueSize = 210f, labelSize = 44f, units = true)
 
     private fun render(
-        context: Context, mode: ActivityMode, t: Telemetry,
+        context: Context, t: Telemetry,
         height: Int, valueSize: Float, labelSize: Float, units: Boolean,
     ): Bitmap {
         val out = Bitmap.createBitmap(WIDTH, height, Bitmap.Config.ARGB_8888)
@@ -49,10 +51,10 @@ object NotificationCard {
             setShadowLayer(10f, 0f, 0f, p.phosphor.copy(alpha = 0.45f).toArgb())
         }
 
-        val metrics = mode.metrics
+        val metrics = listOf(Metrics.Distance, Metrics.Elapsed)
         val col = WIDTH.toFloat() / metrics.size
         val labelY = height * 0.08f - label.ascent()
-        val valueY = labelY + label.descent() + (height - labelY) / 2f - (value.ascent() + value.descent()) / 2f
+        val valueY = (labelY + label.descent() + height) / 2f - (value.ascent() + value.descent()) / 2f
 
         metrics.forEachIndexed { i, m ->
             val x = col * i + col / 2f

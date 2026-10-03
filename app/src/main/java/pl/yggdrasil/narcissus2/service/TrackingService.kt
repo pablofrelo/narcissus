@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import pl.yggdrasil.narcissus2.MainActivity
 import pl.yggdrasil.narcissus2.NarcissusApp
 import pl.yggdrasil.narcissus2.R
+import pl.yggdrasil.narcissus2.domain.Metrics
 import pl.yggdrasil.narcissus2.i18n.Lang
 import pl.yggdrasil.narcissus2.system.LocationSource
 
@@ -97,7 +98,7 @@ class TrackingService : LifecycleService() {
                 .map { s ->
                     // Klucz z tego, co faktycznie widać — obrazek rysujemy
                     // tylko, gdy zmieniła się któraś z wartości.
-                    Triple(s.mode.metrics.joinToString { it.read(s.telemetry) } + Lang.polish, s, s.active)
+                    Triple(Metrics.Distance.read(s.telemetry) + Metrics.Elapsed.read(s.telemetry) + Lang.polish, s, s.active)
                 }
                 .distinctUntilChanged { a, b -> a.first == b.first && a.third == b.third }
                 .collect { (_, s, active) ->
@@ -138,10 +139,10 @@ class TrackingService : LifecycleService() {
 
         if (s != null) {
             val small = RemoteViews(packageName, R.layout.notification_readout).apply {
-                setImageViewBitmap(R.id.readout, NotificationCard.compact(this@TrackingService, s.mode, s.telemetry))
+                setImageViewBitmap(R.id.readout, NotificationCard.compact(this@TrackingService, s.telemetry))
             }
             val big = RemoteViews(packageName, R.layout.notification_readout).apply {
-                setImageViewBitmap(R.id.readout, NotificationCard.expanded(this@TrackingService, s.mode, s.telemetry))
+                setImageViewBitmap(R.id.readout, NotificationCard.expanded(this@TrackingService, s.telemetry))
             }
             builder
                 .setStyle(NotificationCompat.DecoratedCustomViewStyle())
