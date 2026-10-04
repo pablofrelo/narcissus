@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Wersja dev: odwrócona ikona (czarny narcyz na fosforze), żeby na
+     telefonie od razu było widać, która jest która. -->
+<resources>
+    <color name="ic_background">#8CFFB0</color>
+    <color name="ic_phosphor">#050806</color>
+</resources>
