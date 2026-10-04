@@ -174,7 +174,10 @@ class TrackingController(private val context: Context) {
         if (_state.value.active) return
 
         val now = System.currentTimeMillis()
-        engine = TelemetryEngine(_state.value.mode).also { it.start(now) }
+        val st = _state.value
+        val warm = st.system.gnss.hasFix &&
+            (st.telemetry.lastAccuracyM ?: Float.MAX_VALUE) <= st.mode.thresholds.maxAccuracyM
+        engine = TelemetryEngine(st.mode).also { it.start(now, warm) }
         sessionStartedAt = now
         sessionId = UUID.randomUUID().toString()
         track = sessionId?.let { store.openTrack(it) }

@@ -77,9 +77,15 @@ class TelemetryEngine(
     private val stepWindow = ArrayDeque<Pair<Long, Int>>()
 
     /** Pierwsze sekundy odrzucamy — świeży fix potrafi skoczyć o kilkadziesiąt metrów. */
-    private val warmupMs = 8_000L
+    private var warmupMs = 8_000L
 
-    fun start(nowMs: Long) {
+    /**
+     * [warm] = odbiornik już ma dobry fix z czuwania (status GOTOWOŚĆ).
+     * Wtedy kalibracja jest zbędna i dystans liczy się od pierwszej sekundy —
+     * na starcie biegu 8 s kalibracji to 25–30 m w plecy.
+     */
+    fun start(nowMs: Long, warm: Boolean = false) {
+        warmupMs = if (warm) 0L else WARMUP_MS
         startedAt = nowMs
         lastFix = null
         lastFixAt = 0L
@@ -313,6 +319,9 @@ class TelemetryEngine(
          * rzadko wychodzi tak daleko od zaczepienia.
          */
         private const val MIN_FLOOR_M = 3.0
+
+        /** Kalibracja po zimnym starcie — świeży fix potrafi skoczyć o kilkadziesiąt metrów. */
+        private const val WARMUP_MS = 8_000L
 
         /** Okno wygładzania tempa. Krócej skacze, dłużej spóźnia się na zmiany. */
         private const val PACE_WINDOW_MS = 20_000L
