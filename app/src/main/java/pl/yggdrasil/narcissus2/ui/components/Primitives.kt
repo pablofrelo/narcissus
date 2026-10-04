@@ -165,6 +165,11 @@ fun Command(
     onPress: () -> Unit = {},
     /** Puszczony przed końcem przytrzymania. */
     onCancel: () -> Unit = {},
+    /**
+     * true: po pełnym przytrzymaniu akcja czeka na PUSZCZENIE palca.
+     * START tak działa — trzymasz na linii startu, puszczasz z sygnałem.
+     */
+    fireOnRelease: Boolean = false,
 ) {
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -180,22 +185,32 @@ fun Command(
             .fillMaxWidth()
             .height(84.dp)
             .border(1.dp, color)
-            .pointerInput(holdMs) {
+            .pointerInput(holdMs, fireOnRelease) {
                 detectTapGestures(
                     onPress = {
                         pressed()
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        var held = false
                         val run = scope.launch {
                             progress.animateTo(1f, tween(holdMs, easing = LinearEasing))
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            progress.snapTo(0f)
-                            action()
+                            held = true
+                            if (!fireOnRelease) {
+                                progress.snapTo(0f)
+                                action()
+                            }
                         }
                         tryAwaitRelease()
-                        if (progress.value < 1f) {
-                            run.cancel()
-                            cancelled()
-                            scope.launch { progress.animateTo(0f, tween(200)) }
+                        when {
+                            !held -> {
+                                run.cancel()
+                                cancelled()
+                                scope.launch { progress.animateTo(0f, tween(200)) }
+                            }
+                            fireOnRelease -> {
+                                scope.launch { progress.snapTo(0f) }
+                                action()
+                            }
                         }
                     },
                 )

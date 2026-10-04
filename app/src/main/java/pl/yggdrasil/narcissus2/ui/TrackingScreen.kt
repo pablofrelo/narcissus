@@ -167,7 +167,7 @@ fun TrackingScreen(
         if (state.active) {
             Command("STOP", p.alarm, onTerminate, onPress = onArmStop, onCancel = onDisarmStop)
         } else {
-            Command("START", p.phosphor, onCommence)
+            Command("START", p.phosphor, onCommence, fireOnRelease = true)
         }
     }
 }

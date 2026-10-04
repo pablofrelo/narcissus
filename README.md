@@ -23,7 +23,9 @@ English by default; tap `[EN]` in the header to switch to Polish.
 - **Story card**: a 1080×1920 image of a session (your photo fading into
   black, the numbers, a small map), shared through the system share sheet.
 - **Hold to start and stop** (2 s), so a brush of the finger can't end a
-  workout halfway.
+  workout halfway. After the hold, START waits for you to lift your finger,
+  so you can stand on the start line and let go with the gun. STOP freezes
+  the clock the moment you touch it.
 - **Burn-in protection**: the layout drifts slowly across the AMOLED panel.
 
 ## Sync server (optional)

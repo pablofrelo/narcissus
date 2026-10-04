@@ -23,7 +23,9 @@ Domyślnie po angielsku; `[EN]` w nagłówku przełącza na polski.
 - **Karta relacji**: obraz 1080×1920 z sesji (twoje zdjęcie przechodzące
   w czerń, liczby, mapka), udostępniany systemowym „Udostępnij”.
 - **Start i stop przytrzymaniem** (2 s), żeby przypadkowe muśnięcie nie
-  skończyło treningu w połowie.
+  skończyło treningu w połowie. Po przytrzymaniu START czeka, aż puścisz
+  palec, więc możesz stać na linii startu i puścić z sygnałem. STOP
+  zatrzymuje zegar w chwili dotknięcia.
 - **Ochrona przed wypaleniem**: układ powoli wędruje po matrycy AMOLED.
 
 ## Serwer synchronizacji (opcjonalny)
