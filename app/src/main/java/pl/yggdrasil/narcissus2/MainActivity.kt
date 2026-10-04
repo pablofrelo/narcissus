@@ -105,6 +105,8 @@ class MainActivity : ComponentActivity() {
                             state = state,
                             onCommence = tracking::commence,
                             onTerminate = { tracking.terminate() },
+                            onArmStop = tracking::armStop,
+                            onDisarmStop = tracking::disarmStop,
                             onMode = tracking::setMode,
                             onTogglePosition = tracking::togglePosition,
                             onArchive = {

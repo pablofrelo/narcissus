@@ -72,6 +72,10 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
         TrackingService.start(getApplication())
     }
 
+    fun armStop() = controller.armStop()
+
+    fun disarmStop() = controller.disarmStop()
+
     fun terminate() {
         controller.terminate()
         TrackingService.stop(getApplication())

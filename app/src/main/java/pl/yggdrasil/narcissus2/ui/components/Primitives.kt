@@ -161,12 +161,18 @@ fun Command(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     holdMs: Int = 2_000,
+    /** Palec położony — np. zapis stanu, którym skończy się sesja. */
+    onPress: () -> Unit = {},
+    /** Puszczony przed końcem przytrzymania. */
+    onCancel: () -> Unit = {},
 ) {
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     // pointerInput żyje dłużej niż jedna kompozycja — bez tego wywołałby
     // nieaktualną wersję onClick.
     val action by rememberUpdatedState(onClick)
+    val pressed by rememberUpdatedState(onPress)
+    val cancelled by rememberUpdatedState(onCancel)
     val haptic = LocalHapticFeedback.current
 
     Box(
@@ -177,6 +183,7 @@ fun Command(
             .pointerInput(holdMs) {
                 detectTapGestures(
                     onPress = {
+                        pressed()
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         val run = scope.launch {
                             progress.animateTo(1f, tween(holdMs, easing = LinearEasing))
@@ -187,6 +194,7 @@ fun Command(
                         tryAwaitRelease()
                         if (progress.value < 1f) {
                             run.cancel()
+                            cancelled()
                             scope.launch { progress.animateTo(0f, tween(200)) }
                         }
                     },

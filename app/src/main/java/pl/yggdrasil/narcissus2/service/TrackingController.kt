@@ -211,13 +211,33 @@ class TrackingController(private val context: Context) {
         }
     }
 
+    /**
+     * Stan w chwili DOTKNIĘCIA przycisku STOP. Przytrzymanie trwa 2 s,
+     * a te 2 s nie mogą wejść do wyniku — sesja kończy się tym, co było
+     * w momencie położenia palca. Puszczenie wcześniej kasuje zapis.
+     */
+    private var stopMark: Pair<Telemetry, Long>? = null
+
+    fun armStop() {
+        if (!_state.value.active) return
+        val now = System.currentTimeMillis()
+        stopMark = _state.value.telemetry.copy(elapsedMs = now - sessionStartedAt) to now
+    }
+
+    fun disarmStop() {
+        stopMark = null
+    }
+
     fun terminate(markAsTest: Boolean = false) {
         if (!_state.value.active) return
+        val mark = stopMark
+        stopMark = null
 
         sessionJobs.forEach { it.cancel() }
         sessionJobs.clear()
 
-        val telemetry = _state.value.telemetry
+        val telemetry = mark?.first ?: _state.value.telemetry
+        val endedAt = mark?.second ?: System.currentTimeMillis()
         val mode = _state.value.mode
         val id = sessionId
         val points = track?.close() ?: 0
@@ -248,7 +268,7 @@ class TrackingController(private val context: Context) {
             id = id,
             mode = mode,
             startedAt = sessionStartedAt,
-            endedAt = System.currentTimeMillis(),
+            endedAt = endedAt,
             distanceM = telemetry.distanceM,
             elapsedMs = telemetry.elapsedMs,
             movingMs = telemetry.movingMs,

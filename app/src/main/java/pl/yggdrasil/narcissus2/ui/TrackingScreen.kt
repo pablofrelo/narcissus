@@ -45,6 +45,8 @@ fun TrackingScreen(
     state: TrackingUiState,
     onCommence: () -> Unit,
     onTerminate: () -> Unit,
+    onArmStop: () -> Unit,
+    onDisarmStop: () -> Unit,
     onMode: (ActivityMode) -> Unit,
     onTogglePosition: () -> Unit,
     onArchive: () -> Unit,
@@ -163,7 +165,7 @@ fun TrackingScreen(
         }
 
         if (state.active) {
-            Command("STOP", p.alarm, onTerminate)
+            Command("STOP", p.alarm, onTerminate, onPress = onArmStop, onCancel = onDisarmStop)
         } else {
             Command("START", p.phosphor, onCommence)
         }

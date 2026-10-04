@@ -40,6 +40,9 @@ class TelemetryEngine(
     private var movingMs = 0L
     private var maxSpeedMps = 0f
 
+    /** Trzy ostatnie prędkości w ruchu — do maksimum odpornego na skoki. */
+    private val recent = ArrayDeque<Float>()
+
     /** Tempo średnie pokazywane na ekranie, odświeżane co [AVG_PACE_HOLD_MS]. */
     private var avgPaceHeld = 0f
     private var avgPaceHeldAt = 0L
@@ -93,6 +96,7 @@ class TelemetryEngine(
         distanceM = 0.0
         movingMs = 0L
         maxSpeedMps = 0f
+        recent.clear()
         avgPaceHeld = 0f
         avgPaceHeldAt = 0L
         accepted = 0
@@ -182,9 +186,16 @@ class TelemetryEngine(
         val movingBefore = movingMs
         if (moving) {
             movingMs += dtMs
-            // Pojedynczy skok dopplera (spacer 02.10: 11,2 km/h w jednej sekundzie)
-            // nie może zostać maksimum — powyżej limitu trybu to szum, nie ruch.
-            if (speed > maxSpeedMps && speed <= mode.thresholds.maxSpeedMps) maxSpeedMps = speed
+            // Maksimum z mediany trzech ostatnich odczytów: pojedynczy skok
+            // dopplera (spacer 02.10: 11,2 km/h, bieg 04.10: 16,2 km/h przy
+            // 99% odczytów poniżej 13) nie zostaje rekordem, prawdziwy zryw
+            // trwający 2–3 s — tak. Powyżej limitu trybu to zawsze szum.
+            recent.addLast(speed)
+            if (recent.size > 3) recent.removeFirst()
+            val steady = recent.sorted()[recent.size / 2]
+            if (recent.size == 3 && steady > maxSpeedMps && steady <= mode.thresholds.maxSpeedMps) {
+                maxSpeedMps = steady
+            }
         }
         val distBefore = distanceM
 
