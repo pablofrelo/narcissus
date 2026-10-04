@@ -30,8 +30,13 @@ android {
             if (keystoreFile.exists()) {
                 storeFile = file(keystore.getProperty("storeFile"))
                 keyAlias = keystore.getProperty("keyAlias")
+                // Hasło wymagane tylko przy budowaniu wydania; debug idzie bez niego.
                 val pass = System.getenv("NARCISSUS_KEY_PASS")
-                    ?: error("Brak NARCISSUS_KEY_PASS — hasło do klucza wydania")
+                val wantsRelease = gradle.startParameter.taskNames
+                    .any { it.contains("release", ignoreCase = true) }
+                if (pass == null && wantsRelease) {
+                    error("Brak NARCISSUS_KEY_PASS — hasło do klucza wydania")
+                }
                 storePassword = pass
                 keyPassword = pass
             }
