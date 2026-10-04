@@ -110,6 +110,8 @@ class MainActivity : ComponentActivity() {
                             onMode = tracking::setMode,
                             onDetail = tracking::toggleDetail,
                             onCloseDetail = tracking::closeDetail,
+                            onAcceptSuggestion = tracking::acceptSuggestion,
+                            onDismissSuggestion = tracking::dismissSuggestion,
                             onArchive = {
                                 archive.refresh()
                                 screen = Screen.Archive

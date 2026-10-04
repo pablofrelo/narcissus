@@ -51,6 +51,8 @@ fun TrackingScreen(
     onMode: (ActivityMode) -> Unit,
     onDetail: (Detail) -> Unit,
     onCloseDetail: () -> Unit,
+    onAcceptSuggestion: () -> Unit,
+    onDismissSuggestion: () -> Unit,
     onArchive: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -120,6 +122,29 @@ fun TrackingScreen(
                 Label(notice, color = p.amber, softWrap = false)
             }
 
+            // Po zapisie: liczby nie pasują do wybranego trybu.
+            state.suggestion?.let { mode ->
+                Label(
+                    tr("LOOKS LIKE %s", "WYGLĄDA NA %s").format(mode.label.text),
+                    color = p.amber,
+                    softWrap = false,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Label(
+                        tr("[CHANGE]", "[ZMIEŃ]"),
+                        color = p.phosphor,
+                        softWrap = false,
+                        modifier = Modifier.tap(onAcceptSuggestion),
+                    )
+                    Label(
+                        tr("[KEEP]", "[ZOSTAW]"),
+                        color = p.dim,
+                        softWrap = false,
+                        modifier = Modifier.tap(onDismissSuggestion),
+                    )
+                }
+            }
+
             ModeSelector(
                 labels = ActivityMode.entries.map { it.label.text },
                 selectedIndex = state.mode.ordinal,
@@ -169,7 +194,9 @@ fun TrackingScreen(
         if (state.active) {
             Command("STOP", p.alarm, onTerminate, onPress = onArmStop, onCancel = onDisarmStop)
         } else {
-            Command("START", p.phosphor, onCommence, fireOnRelease = true)
+            // Nazwa trybu zamiast "START" — trzymając palec 2 s nie da się
+            // nie zauważyć, że zaraz ruszy ROWER, a idziesz na spacer.
+            Command(state.mode.label.text, p.phosphor, onCommence, fireOnRelease = true)
         }
     }
 }

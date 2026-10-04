@@ -22,6 +22,7 @@ import pl.yggdrasil.narcissus2.domain.Session
 import pl.yggdrasil.narcissus2.domain.Telemetry
 import pl.yggdrasil.narcissus2.domain.TelemetryEngine
 import pl.yggdrasil.narcissus2.domain.TrackPoint
+import pl.yggdrasil.narcissus2.domain.guessMode
 import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.system.LocationSource
 import pl.yggdrasil.narcissus2.system.StepSource
@@ -54,8 +55,12 @@ class TrackingController(private val context: Context) {
         val latitude: Double? = null,
         val longitude: Double? = null,
         val notice: String? = null,
+        /** Podpowiedź po zapisie: ta sesja wygląda na inny tryb. */
+        val suggestion: Suggestion? = null,
         val error: String? = null,
     )
+
+    data class Suggestion(val sessionId: String, val mode: ActivityMode)
 
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
@@ -184,14 +189,15 @@ class TrackingController(private val context: Context) {
         sessionId = UUID.randomUUID().toString()
         track = sessionId?.let { store.openTrack(it) }
 
-        _state.update { it.copy(active = true, telemetry = Telemetry(), notice = null) }
+        suggestionJob?.cancel()
+        _state.update { it.copy(active = true, telemetry = Telemetry(), notice = null, suggestion = null) }
         retune()
 
-        if (_state.value.mode.usesStepSensor) {
-            sessionJobs += scope.launch {
-                stepper.steps().collect { total ->
-                    engine?.onStepCounter(total, System.currentTimeMillis())
-                }
+        // Kroki w KAŻDYM trybie. Na rowerze ich nie widać, ale bez nich
+        // po zapisie nie dałoby się poznać, że to był spacer.
+        sessionJobs += scope.launch {
+            stepper.steps().collect { total ->
+                engine?.onStepCounter(total, System.currentTimeMillis())
             }
         }
 
@@ -300,8 +306,37 @@ class TrackingController(private val context: Context) {
 
         scope.launch {
             store.save(session)
+            guessMode(session)?.takeIf { it != mode }?.let { suggest(Suggestion(id, it)) }
             flash(tr("SAVED %.2f KM", "ZAPISANO %.2f KM").format(session.distanceM / 1000.0))
         }
+    }
+
+    private var suggestionJob: Job? = null
+
+    /** Podpowiedź wisi pół minuty; potem sesja zostaje, jak była. */
+    private fun suggest(s: Suggestion) {
+        suggestionJob?.cancel()
+        _state.update { it.copy(suggestion = s) }
+        suggestionJob = scope.launch {
+            delay(SUGGESTION_MS)
+            _state.update { if (it.suggestion == s) it.copy(suggestion = null) else it }
+        }
+    }
+
+    /** Zmienia tryb zapisanej sesji i od razu przestawia selektor na następny raz. */
+    fun acceptSuggestion() {
+        val s = _state.value.suggestion ?: return
+        suggestionJob?.cancel()
+        _state.update { it.copy(suggestion = null, mode = if (it.active) it.mode else s.mode) }
+        scope.launch {
+            store.changeMode(s.sessionId, s.mode)
+            flash(tr("CHANGED TO %s", "ZMIENIONO NA %s").format(s.mode.label.text))
+        }
+    }
+
+    fun dismissSuggestion() {
+        suggestionJob?.cancel()
+        _state.update { it.copy(suggestion = null) }
     }
 
     private suspend fun flash(text: String) {
@@ -313,5 +348,6 @@ class TrackingController(private val context: Context) {
     companion object {
         private const val STANDBY_INTERVAL_MS = 4_000L
         private const val MIN_SAVED_DISTANCE_M = 50.0
+        private const val SUGGESTION_MS = 30_000L
     }
 }

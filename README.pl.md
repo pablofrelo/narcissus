@@ -22,6 +22,9 @@ Domyślnie po angielsku; `[EN]` w nagłówku przełącza na polski.
 - **Dziennik sesji** w telefonie, z mapką każdego śladu.
 - **Karta relacji**: obraz 1080×1920 z sesji (twoje zdjęcie przechodzące
   w czerń, liczby, mapka), udostępniany systemowym „Udostępnij”.
+- **Na przycisku startu widać tryb** (ROWER, BIEG, PIESZO), a po zapisie
+  aplikacja sprawdza prędkość i kadencję: jeśli spacer poszedł jako jazda,
+  proponuje zmianę trybu. Kroki liczą się do tego w każdym trybie.
 - **Start i stop przytrzymaniem** (2 s), żeby przypadkowe muśnięcie nie
   skończyło treningu w połowie. Po przytrzymaniu START czeka, aż puścisz
   palec, więc możesz stać na linii startu i puścić z sygnałem. STOP

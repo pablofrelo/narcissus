@@ -22,6 +22,9 @@ English by default; tap `[EN]` in the header to switch to Polish.
 - **Session log** stored on the phone, with a map of each track.
 - **Story card**: a 1080×1920 image of a session (your photo fading into
   black, the numbers, a small map), shared through the system share sheet.
+- **The start button shows the mode** (BIKE, RUN, WALK), and after saving
+  the app checks speed and cadence: if a walk was recorded as a ride, it
+  offers to change the mode. Steps are counted in every mode for this.
 - **Hold to start and stop** (2 s), so a brush of the finger can't end a
   workout halfway. After the hold, START waits for you to lift your finger,
   so you can stand on the start line and let go with the gun. STOP freezes

@@ -26,6 +26,7 @@ data class TrackingUiState(
     val longitude: Double? = null,
     val error: String? = null,
     val notice: String? = null,
+    val suggestion: ActivityMode? = null,
 ) {
     val ready: Boolean
         get() = system.gnss.hasFix &&
@@ -59,6 +60,7 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
                 longitude = c.longitude,
                 error = c.error,
                 notice = c.notice,
+                suggestion = c.suggestion?.mode,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TrackingUiState())
 
@@ -75,6 +77,10 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
         // miało już sensowną treść.
         TrackingService.start(getApplication())
     }
+
+    fun acceptSuggestion() = controller.acceptSuggestion()
+
+    fun dismissSuggestion() = controller.dismissSuggestion()
 
     fun armStop() = controller.armStop()
 

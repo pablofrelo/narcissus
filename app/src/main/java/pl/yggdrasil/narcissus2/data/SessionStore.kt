@@ -43,6 +43,16 @@ class SessionStore(context: Context) {
         writeIndex(current + session)
     }
 
+    /** Zmiana trybu po fakcie — nowy updatedAt, żeby sync rozesłał poprawkę. */
+    suspend fun changeMode(id: String, mode: ActivityMode) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        writeIndex(
+            readIndex().map {
+                if (it.id == id) it.copy(mode = mode, updatedAt = now, synced = false) else it
+            },
+        )
+    }
+
     /**
      * Kasowanie zostawia nagrobek. Rekord znika z listy, ale zostaje
      * w pliku, żeby sync mógł go rozesłać jako "skasowane".
