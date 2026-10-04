@@ -163,7 +163,9 @@ class TrackingController(private val context: Context) {
 
         _state.update {
             it.copy(
-                telemetry = telemetry,
+                // Przy wciśniętym STOP ekran stoi na stanie z chwili dotknięcia,
+                // a silnik liczy dalej pod spodem na wypadek puszczenia.
+                telemetry = stopMark?.first ?: telemetry,
                 latitude = fix.latitude,
                 longitude = fix.longitude,
             )
@@ -197,6 +199,7 @@ class TrackingController(private val context: Context) {
             while (true) {
                 delay(1_000)
                 val t = engine?.tick(System.currentTimeMillis()) ?: break
+                if (stopMark != null) continue
                 _state.update { s ->
                     // Kroki i kadencja lecą także bez nowego fixa, np. w tunelu.
                     s.copy(
@@ -221,11 +224,25 @@ class TrackingController(private val context: Context) {
     fun armStop() {
         if (!_state.value.active) return
         val now = System.currentTimeMillis()
-        stopMark = _state.value.telemetry.copy(elapsedMs = now - sessionStartedAt) to now
+        val frozen = _state.value.telemetry.copy(elapsedMs = now - sessionStartedAt)
+        stopMark = frozen to now
+        _state.update { it.copy(telemetry = frozen) }
     }
 
     fun disarmStop() {
         stopMark = null
+        // Odmrożenie: zegar od razu wraca do bieżącego czasu, dystans
+        // i tempo z najbliższym fixem.
+        val t = engine?.tick(System.currentTimeMillis()) ?: return
+        _state.update {
+            it.copy(
+                telemetry = it.telemetry.copy(
+                    elapsedMs = t.elapsedMs,
+                    totalSteps = t.totalSteps,
+                    cadenceSpm = t.cadenceSpm,
+                ),
+            )
+        }
     }
 
     fun terminate(markAsTest: Boolean = false) {
