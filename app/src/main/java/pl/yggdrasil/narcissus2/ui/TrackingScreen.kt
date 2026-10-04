@@ -20,11 +20,12 @@ import pl.yggdrasil.narcissus2.i18n.Lang
 import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.ui.components.BurnInShift
 import pl.yggdrasil.narcissus2.ui.components.Command
+import pl.yggdrasil.narcissus2.ui.components.Detail
+import pl.yggdrasil.narcissus2.ui.components.DetailPanel
 import pl.yggdrasil.narcissus2.ui.components.IndicatorStrip
 import pl.yggdrasil.narcissus2.ui.components.Label
 import pl.yggdrasil.narcissus2.ui.components.ModeSelector
 import pl.yggdrasil.narcissus2.ui.components.Panel
-import pl.yggdrasil.narcissus2.ui.components.PositionPanel
 import pl.yggdrasil.narcissus2.ui.components.Readout
 import pl.yggdrasil.narcissus2.ui.components.burnInPadding
 import pl.yggdrasil.narcissus2.ui.components.rememberBurnInShift
@@ -48,7 +49,8 @@ fun TrackingScreen(
     onArmStop: () -> Unit,
     onDisarmStop: () -> Unit,
     onMode: (ActivityMode) -> Unit,
-    onTogglePosition: () -> Unit,
+    onDetail: (Detail) -> Unit,
+    onCloseDetail: () -> Unit,
     onArchive: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -127,16 +129,16 @@ fun TrackingScreen(
 
             // --- wskaźniki podsystemów, w pasku ---
             Panel {
-                IndicatorStrip(status = state.system, onTapGnss = onTogglePosition)
+                IndicatorStrip(status = state.system, onTap = onDetail)
             }
 
-            PositionPanel(
-                visible = state.positionVisible,
+            DetailPanel(
+                detail = state.detail,
                 latitude = state.latitude,
                 longitude = state.longitude,
                 accuracyM = state.telemetry.lastAccuracyM,
                 status = state.system,
-                onDismiss = onTogglePosition,
+                onDismiss = onCloseDetail,
             )
 
             // --- wielka cyfra, tylko w trybach z hero ---

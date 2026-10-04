@@ -38,6 +38,10 @@ data class SystemStatus(
         val dbm: Int? = null,
         /** Modem wyłączony albo brak karty. */
         val offline: Boolean = false,
+        /** Nazwa sieci, w której telefon jest zalogowany. */
+        val operator: String? = null,
+        /** 2G / 3G / LTE / 5G — z rodzaju komórek, które widzi modem. */
+        val tech: String? = null,
     )
 
     data class Battery(

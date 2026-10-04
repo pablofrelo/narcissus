@@ -108,7 +108,8 @@ class MainActivity : ComponentActivity() {
                             onArmStop = tracking::armStop,
                             onDisarmStop = tracking::disarmStop,
                             onMode = tracking::setMode,
-                            onTogglePosition = tracking::togglePosition,
+                            onDetail = tracking::toggleDetail,
+                            onCloseDetail = tracking::closeDetail,
                             onArchive = {
                                 archive.refresh()
                                 screen = Screen.Archive

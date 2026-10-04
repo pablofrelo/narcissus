@@ -11,6 +11,12 @@ import android.location.LocationManager
 import android.os.BatteryManager
 import android.os.Build
 import android.telephony.CellSignalStrength
+import android.telephony.CellSignalStrengthCdma
+import android.telephony.CellSignalStrengthGsm
+import android.telephony.CellSignalStrengthLte
+import android.telephony.CellSignalStrengthNr
+import android.telephony.CellSignalStrengthTdscdma
+import android.telephony.CellSignalStrengthWcdma
 import android.telephony.PhoneStateListener
 import android.telephony.SignalStrength
 import android.telephony.TelephonyCallback
@@ -132,6 +138,10 @@ class SystemMonitor(private val context: Context) {
                     level = best?.level ?: -1,
                     dbm = best?.dbm,
                     offline = cells.isEmpty(),
+                    // Nazwa sieci i jej rodzaj bez READ_PHONE_STATE: nazwę
+                    // system podaje każdemu, rodzaj wynika z typu komórek.
+                    operator = tm.networkOperatorName.ifBlank { tm.simOperatorName }.ifBlank { null },
+                    tech = technology(cells),
                 ),
             )
         }
@@ -158,6 +168,18 @@ class SystemMonitor(private val context: Context) {
         }
 
         awaitClose { runCatching { unregister() } }
+    }
+
+    /**
+     * LTE razem z NR to 5G NSA — kotwica w LTE, dane po 5G; tak samo
+     * pokazuje to pasek statusu.
+     */
+    private fun technology(cells: List<CellSignalStrength>): String? = when {
+        cells.any { it is CellSignalStrengthNr } -> "5G"
+        cells.any { it is CellSignalStrengthLte } -> "LTE"
+        cells.any { it is CellSignalStrengthWcdma || it is CellSignalStrengthTdscdma } -> "3G"
+        cells.any { it is CellSignalStrengthGsm || it is CellSignalStrengthCdma } -> "2G"
+        else -> null
     }
 
     @RequiresApi(Build.VERSION_CODES.S)

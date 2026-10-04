@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,6 +25,7 @@ import pl.yggdrasil.narcissus2.ui.theme.Grid
 import pl.yggdrasil.narcissus2.ui.theme.Theme
 import pl.yggdrasil.narcissus2.ui.theme.Type
 import pl.yggdrasil.narcissus2.ui.theme.gridSp
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 
 /** Progi termiczne. Powyżej 40 stopni telefon zaczyna dławić taktowanie. */
@@ -45,9 +48,12 @@ private data class IndicatorSpec(
     val onTap: (() -> Unit)? = null,
 )
 
+/** Panel szczegółów pod wskaźnikiem, który dotknięto. */
+enum class Detail { GPS, GSM, PWR }
+
 /** Trzy wskaźniki podsystemów — wspólne dane dla kolumny i paska. */
 @Composable
-private fun indicatorSpecs(status: SystemStatus, onTapGnss: () -> Unit): List<IndicatorSpec> {
+private fun indicatorSpecs(status: SystemStatus, onTap: (Detail) -> Unit): List<IndicatorSpec> {
     val p = Theme.palette
     val temp = status.battery.temperatureC
 
@@ -67,7 +73,7 @@ private fun indicatorSpecs(status: SystemStatus, onTapGnss: () -> Unit): List<In
                 "----"
             },
             tint = if (status.gnss.hasFix) p.phosphor else p.amber,
-            onTap = onTapGnss,
+            onTap = { onTap(Detail.GPS) },
         ),
         IndicatorSpec(
             tag = "GSM",
@@ -78,6 +84,7 @@ private fun indicatorSpecs(status: SystemStatus, onTapGnss: () -> Unit): List<In
                 status.cellular.level <= 1 -> p.amber
                 else -> p.phosphor
             },
+            onTap = { onTap(Detail.GSM) },
         ),
         IndicatorSpec(
             tag = if (overheating) "TMP" else "PWR",
@@ -94,6 +101,7 @@ private fun indicatorSpecs(status: SystemStatus, onTapGnss: () -> Unit): List<In
                 status.battery.level <= 1 -> p.amber
                 else -> p.phosphor
             },
+            onTap = { onTap(Detail.PWR) },
         ),
     )
 }
@@ -107,14 +115,14 @@ private fun indicatorSpecs(status: SystemStatus, onTapGnss: () -> Unit): List<In
 @Composable
 fun IndicatorStrip(
     status: SystemStatus,
-    onTapGnss: () -> Unit,
+    onTap: (Detail) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        indicatorSpecs(status, onTapGnss).forEach { it.Draw(Modifier.weight(1f), compact = true) }
+        indicatorSpecs(status, onTap).forEach { it.Draw(Modifier.weight(1f), compact = true) }
     }
 }
 
@@ -197,15 +205,17 @@ private fun Indicator(
 }
 
 /**
- * Panel szczegółów, rozwijany dotknięciem wskaźnika GPS.
+ * Panel szczegółów pod paskiem wskaźników: GPS, GSM albo PWR, zależnie od
+ * tego, który dotknięto.
  *
- * Trafia tu wszystko, co sprawdzasz sporadycznie i na postoju: pozycja,
- * stan konstelacji, temperatura ogniwa. Na stałym widoku te dane tylko
- * zabierałyby miejsce odczytom, na które patrzysz w ruchu.
+ * Trafia tu wszystko, co sprawdzasz sporadycznie i na postoju. Na stałym
+ * widoku te dane tylko zabierałyby miejsce odczytom, na które patrzysz
+ * w ruchu. Zwija się dotknięciem albo sam po [AUTO_CLOSE_MS], jak menu
+ * w muthurze — otwarty panel nie może zostać na całą trasę.
  */
 @Composable
-fun PositionPanel(
-    visible: Boolean,
+fun DetailPanel(
+    detail: Detail?,
     latitude: Double?,
     longitude: Double?,
     accuracyM: Float?,
@@ -213,62 +223,116 @@ fun PositionPanel(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val p = Theme.palette
+    // Ostatni otwarty panel zostaje w pamięci, żeby było co zwijać
+    // w animacji wyjścia, gdy detail jest już null.
+    val last = remember { arrayOf(Detail.GPS) }
+    if (detail != null) last[0] = detail
+    val shown = detail ?: last[0]
+
+    // Każde otwarcie albo przełączenie na inny wskaźnik liczy od nowa.
+    LaunchedEffect(detail) {
+        if (detail != null) {
+            delay(AUTO_CLOSE_MS)
+            onDismiss()
+        }
+    }
 
     AnimatedVisibility(
-        visible = visible,
+        visible = detail != null,
         enter = expandVertically(),
         exit = shrinkVertically(),
     ) {
         Panel(modifier.tap(onDismiss)) {
-            if (latitude == null || longitude == null) {
-                DetailRow(tr("LAT.", "SZER."), tr("NO FIX", "BRAK FIXA"), "", p.amber)
-            } else {
-                // Pięć miejsc po przecinku to około metra rozdzielczości.
-                // DMS obok, bo mapy papierowe nadal go używają.
-                DetailRow(tr("LAT.", "SZER."), "%.5f".format(latitude), dms(latitude, true))
-                DetailRow(tr("LON.", "DŁUG."), "%.5f".format(longitude), dms(longitude, false))
+            when (shown) {
+                Detail.GPS -> GpsDetail(latitude, longitude, accuracyM, status.gnss)
+                Detail.GSM -> GsmDetail(status.cellular)
+                Detail.PWR -> PwrDetail(status.battery)
             }
-
-            accuracyM?.let { DetailRow(tr("ACC.", "BŁĄD"), "%.0f M".format(it), "") }
-
-            // Widoczne kontra użyte w rozwiązaniu: duża różnica oznacza
-            // przeszkody terenowe, nawet gdy sam fix wygląda poprawnie.
-            DetailRow(
-                label = tr("SATS", "SATY"),
-                value = "${status.gnss.usedInFix}/${status.gnss.visible}",
-                trailing = if (status.gnss.topCn0 > 0f) {
-                    "%.0f dBHz".format(status.gnss.topCn0)
-                } else {
-                    ""
-                },
-                valueColor = if (status.gnss.hasFix) p.readout else p.amber,
-            )
-
-            status.battery.temperatureC?.let { t ->
-                DetailRow(
-                    label = "TEMP",
-                    value = "%.1f\u00B0C".format(t),
-                    trailing = when {
-                        t >= TEMP_CRITICAL -> tr("OVERHEAT", "PRZEGRZANIE")
-                        t >= TEMP_WARN -> tr("HIGH", "WYSOKA")
-                        else -> ""
-                    },
-                    valueColor = when {
-                        t >= TEMP_CRITICAL -> p.alarm
-                        t >= TEMP_WARN -> p.amber
-                        else -> p.readout
-                    },
-                )
-            }
-
-            DetailRow(
-                label = tr("POWER", "ZASIL."),
-                value = if (status.battery.percent >= 0) "${status.battery.percent}%" else "--",
-                trailing = if (status.battery.charging) tr("CHARGING", "ŁADOWANIE") else tr("TAP TO CLOSE", "DOTKNIJ BY ZWINĄĆ"),
-            )
         }
     }
+}
+
+private const val AUTO_CLOSE_MS = 5_000L
+
+@Composable
+private fun GpsDetail(
+    latitude: Double?,
+    longitude: Double?,
+    accuracyM: Float?,
+    gnss: SystemStatus.Gnss,
+) {
+    val p = Theme.palette
+
+    if (latitude == null || longitude == null) {
+        DetailRow(tr("LAT.", "SZER."), tr("NO FIX", "BRAK FIXA"), "", p.amber)
+    } else {
+        // Pięć miejsc po przecinku to około metra rozdzielczości.
+        // DMS obok, bo mapy papierowe nadal go używają.
+        DetailRow(tr("LAT.", "SZER."), "%.5f".format(latitude), dms(latitude, true))
+        DetailRow(tr("LON.", "DŁUG."), "%.5f".format(longitude), dms(longitude, false))
+    }
+
+    accuracyM?.let { DetailRow(tr("ACC.", "BŁĄD"), "%.0f M".format(it), "") }
+
+    // Widoczne kontra użyte w rozwiązaniu: duża różnica oznacza
+    // przeszkody terenowe, nawet gdy sam fix wygląda poprawnie.
+    DetailRow(
+        label = tr("SATS", "SATY"),
+        value = "${gnss.usedInFix}/${gnss.visible}",
+        trailing = if (gnss.topCn0 > 0f) "%.0f dBHz".format(gnss.topCn0) else "",
+        valueColor = if (gnss.hasFix) p.readout else p.amber,
+    )
+}
+
+@Composable
+private fun GsmDetail(cell: SystemStatus.Cellular) {
+    val p = Theme.palette
+
+    DetailRow(
+        label = tr("NET", "SIEĆ"),
+        value = cell.operator ?: "----",
+        trailing = "",
+        valueColor = if (cell.operator == null) p.amber else p.readout,
+    )
+    DetailRow(
+        label = tr("TYPE", "RODZAJ"),
+        value = cell.tech ?: "----",
+        trailing = "",
+        valueColor = if (cell.tech == null) p.amber else p.readout,
+    )
+    DetailRow(
+        label = tr("SIGNAL", "SYGNAŁ"),
+        value = cell.dbm?.let { "$it dBm" } ?: "----",
+        trailing = if (cell.level >= 0) "${cell.level}/4" else "",
+    )
+}
+
+@Composable
+private fun PwrDetail(battery: SystemStatus.Battery) {
+    val p = Theme.palette
+    val t = battery.temperatureC
+
+    DetailRow(
+        label = "TEMP",
+        value = t?.let { "%.1f\u00B0C".format(it) } ?: "----",
+        trailing = when {
+            t == null -> ""
+            t >= TEMP_CRITICAL -> tr("OVERHEAT", "PRZEGRZANIE")
+            t >= TEMP_WARN -> tr("HIGH", "WYSOKA")
+            else -> ""
+        },
+        valueColor = when {
+            t == null -> p.amber
+            t >= TEMP_CRITICAL -> p.alarm
+            t >= TEMP_WARN -> p.amber
+            else -> p.readout
+        },
+    )
+    DetailRow(
+        label = tr("STATE", "STAN"),
+        value = if (battery.charging) tr("CHARGING", "ŁADOWANIE") else tr("ON BATTERY", "NA BATERII"),
+        trailing = "",
+    )
 }
 
 @Composable

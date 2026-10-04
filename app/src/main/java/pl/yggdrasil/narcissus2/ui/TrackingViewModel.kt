@@ -14,13 +14,14 @@ import pl.yggdrasil.narcissus2.domain.ActivityMode
 import pl.yggdrasil.narcissus2.domain.Telemetry
 import pl.yggdrasil.narcissus2.service.TrackingService
 import pl.yggdrasil.narcissus2.system.SystemStatus
+import pl.yggdrasil.narcissus2.ui.components.Detail
 
 data class TrackingUiState(
     val mode: ActivityMode = ActivityMode.Bike,
     val active: Boolean = false,
     val telemetry: Telemetry = Telemetry(),
     val system: SystemStatus = SystemStatus(),
-    val positionVisible: Boolean = false,
+    val detail: Detail? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val error: String? = null,
@@ -33,13 +34,13 @@ data class TrackingUiState(
 
 /** Rzeczy, które dotyczą wyłącznie wyglądu i nie mają prawa przeżyć ekranu. */
 private data class LocalUi(
-    val positionVisible: Boolean = false,
+    val detail: Detail? = null,
 )
 
 /**
  * ViewModel jest teraz cienki: pomiar mieszka w kontrolerze przypiętym do
  * procesu, tutaj zostaje tylko stan czysto ekranowy (rozwinięty panel
- * pozycji) i przekazywanie poleceń dalej.
+ * szczegółów) i przekazywanie poleceń dalej.
  */
 class TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -53,7 +54,7 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
                 active = c.active,
                 telemetry = c.telemetry,
                 system = c.system,
-                positionVisible = ui.positionVisible,
+                detail = ui.detail,
                 latitude = c.latitude,
                 longitude = c.longitude,
                 error = c.error,
@@ -63,7 +64,10 @@ class TrackingViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setMode(mode: ActivityMode) = controller.setMode(mode)
 
-    fun togglePosition() = local.update { it.copy(positionVisible = !it.positionVisible) }
+    /** Ten sam wskaźnik zwija, inny przełącza panel. */
+    fun toggleDetail(d: Detail) = local.update { it.copy(detail = if (it.detail == d) null else d) }
+
+    fun closeDetail() = local.update { it.copy(detail = null) }
 
     fun commence() {
         controller.commence()
