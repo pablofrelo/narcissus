@@ -2,6 +2,7 @@ package pl.yggdrasil.narcissus2.service
 
 import android.content.Context
 import android.location.Location
+import android.os.Build
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import pl.yggdrasil.narcissus2.BuildConfig
 import pl.yggdrasil.narcissus2.data.SessionStore
 import pl.yggdrasil.narcissus2.domain.ActivityMode
 import pl.yggdrasil.narcissus2.domain.Session
@@ -302,6 +304,8 @@ class TrackingController(private val context: Context) {
             rejectedFixes = telemetry.rejectedFixes,
             pointCount = points,
             test = markAsTest,
+            deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
+            appVersion = BuildConfig.VERSION_NAME,
         )
 
         scope.launch {

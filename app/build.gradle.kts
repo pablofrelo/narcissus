@@ -55,11 +55,13 @@ android {
         }
         debug {
             applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
         }
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {

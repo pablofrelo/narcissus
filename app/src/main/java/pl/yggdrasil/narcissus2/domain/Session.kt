@@ -49,6 +49,15 @@ data class Session(
 
     /** Czy serwer potwierdził odbiór tej wersji rekordu. */
     val synced: Boolean = false,
+
+    /**
+     * Na czym i jaką wersją nagrano. Ustawiane raz przy zapisie i jadą
+     * z sesją wszędzie — w przeciwieństwie do UUID urządzenia, który
+     * zmienia się przy każdej reinstalacji i nic nie mówi.
+     * Null dla sesji sprzed tej zmiany.
+     */
+    val deviceModel: String? = null,
+    val appVersion: String? = null,
 ) {
     val alive: Boolean get() = deletedAt == null
 }

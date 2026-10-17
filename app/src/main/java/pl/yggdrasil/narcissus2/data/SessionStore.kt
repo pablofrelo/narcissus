@@ -205,6 +205,8 @@ class SessionStore(context: Context) {
         .put("updatedAt", updatedAt)
         .apply { deletedAt?.let { put("deletedAt", it) } }
         .put("synced", synced)
+        .apply { deviceModel?.let { put("deviceModel", it) } }
+        .apply { appVersion?.let { put("appVersion", it) } }
     }
 
     // isNull, nie has: serwer odsyła brakujące pola jako null, a has()
@@ -231,6 +233,8 @@ class SessionStore(context: Context) {
         updatedAt = optLong("updatedAt", getLong("endedAt")),
         deletedAt = if (isNull("deletedAt")) null else getLong("deletedAt"),
         synced = optBoolean("synced", false),
+        deviceModel = if (isNull("deviceModel")) null else getString("deviceModel"),
+        appVersion = if (isNull("appVersion")) null else getString("appVersion"),
         )
     }
 
