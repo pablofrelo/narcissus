@@ -26,6 +26,7 @@ import pl.yggdrasil.narcissus2.domain.TelemetryEngine
 import pl.yggdrasil.narcissus2.domain.TrackPoint
 import pl.yggdrasil.narcissus2.domain.guessMode
 import pl.yggdrasil.narcissus2.i18n.tr
+import pl.yggdrasil.narcissus2.system.BatteryExemption
 import pl.yggdrasil.narcissus2.system.LocationSource
 import pl.yggdrasil.narcissus2.system.StepSource
 import pl.yggdrasil.narcissus2.system.SystemMonitor
@@ -195,6 +196,20 @@ class TrackingController(private val context: Context) {
         _state.update { it.copy(active = true, telemetry = Telemetry(), notice = null, suggestion = null) }
         retune()
 
+        // Oszczędzanie energii dławi GPS w tle: spacer 27.10 skończył się
+        // bez fixów i został odrzucony jako "brak ruchu". Sprawdzamy przy
+        // starcie i co minutę, bo telefon sam włącza oszczędzanie przy
+        // niskiej baterii.
+        sessionJobs += scope.launch {
+            var last: String? = null
+            while (true) {
+                val p = BatteryExemption.problem(context)
+                if (p != null && p != last) warn(p)
+                last = p
+                delay(60_000)
+            }
+        }
+
         // Kroki w KAŻDYM trybie. Na rowerze ich nie widać, ale bez nich
         // po zapisie nie dałoby się poznać, że to był spacer.
         sessionJobs += scope.launch {
@@ -281,7 +296,11 @@ class TrackingController(private val context: Context) {
 
         if (id == null) return
 
-        if (telemetry.distanceM < MIN_SAVED_DISTANCE_M) {
+        // Odrzucamy tylko krótkie sesje bez ruchu (przypadkowy START).
+        // Długa sesja bez dystansu to raczej zgubiony GPS niż pomyłka —
+        // zostaje zapisana razem z czasem i krokami.
+        val noMovement = telemetry.distanceM < MIN_SAVED_DISTANCE_M
+        if (noMovement && telemetry.elapsedMs < MIN_KEPT_ELAPSED_MS) {
             scope.launch {
                 store.trackFile(id).delete()
                 flash(tr("SESSION DISCARDED - NO MOVEMENT", "SESJA ODRZUCONA - BRAK RUCHU"))
@@ -311,7 +330,11 @@ class TrackingController(private val context: Context) {
         scope.launch {
             store.save(session)
             guessMode(session)?.takeIf { it != mode }?.let { suggest(Suggestion(id, it)) }
-            flash(tr("SAVED %.2f KM", "ZAPISANO %.2f KM").format(session.distanceM / 1000.0))
+            if (noMovement) {
+                warn(tr("SAVED WITHOUT DISTANCE - NO GPS?", "ZAPISANO BEZ DYSTANSU - BRAK GPS?"))
+            } else {
+                flash(tr("SAVED %.2f KM", "ZAPISANO %.2f KM").format(session.distanceM / 1000.0))
+            }
         }
     }
 
@@ -343,15 +366,20 @@ class TrackingController(private val context: Context) {
         _state.update { it.copy(suggestion = null) }
     }
 
-    private suspend fun flash(text: String) {
+    private suspend fun flash(text: String, ms: Long = 4_000) {
         _state.update { it.copy(notice = text) }
-        delay(4_000)
+        delay(ms)
         _state.update { if (it.notice == text) it.copy(notice = null) else it }
     }
+
+    /** Ostrzeżenie wisi dłużej niż zwykły komunikat. */
+    private suspend fun warn(text: String) = flash(text, 15_000)
 
     companion object {
         private const val STANDBY_INTERVAL_MS = 4_000L
         private const val MIN_SAVED_DISTANCE_M = 50.0
+        /** Sesja bez ruchu, ale dłuższa niż tyle, i tak jest zapisywana. */
+        private const val MIN_KEPT_ELAPSED_MS = 3 * 60_000L
         private const val SUGGESTION_MS = 30_000L
     }
 }

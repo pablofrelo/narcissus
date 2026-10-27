@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import pl.yggdrasil.narcissus2.i18n.tr
 
 /**
  * Wyjęcie aplikacji spod optymalizacji baterii.
@@ -19,6 +20,21 @@ object BatteryExemption {
     fun isExempt(context: Context): Boolean =
         context.getSystemService(PowerManager::class.java)
             .isIgnoringBatteryOptimizations(context.packageName)
+
+    /**
+     * Systemowe oszczędzanie energii. Wyjątek od optymalizacji nie chroni
+     * przed nim: One UI w tym trybie dławi GPS w tle i fixy przestają
+     * przychodzić przy zgaszonym ekranie.
+     */
+    fun isPowerSave(context: Context): Boolean =
+        context.getSystemService(PowerManager::class.java).isPowerSaveMode
+
+    /** Co jest nie tak z energią, albo null, gdy nic. */
+    fun problem(context: Context): String? = when {
+        isPowerSave(context) -> tr("POWER SAVING - GPS AT RISK", "OSZCZĘDZANIE ENERGII - GPS ZAGROŻONY")
+        !isExempt(context) -> tr("BATTERY OPTIMISED - GPS AT RISK", "OPTYMALIZACJA BATERII - GPS ZAGROŻONY")
+        else -> null
+    }
 
     @SuppressLint("BatteryLife")
     fun request(context: Context) {
