@@ -13,7 +13,11 @@ import pl.yggdrasil.narcissus2.data.SessionStore
 import pl.yggdrasil.narcissus2.data.SyncClient
 import pl.yggdrasil.narcissus2.data.SyncEngine
 import pl.yggdrasil.narcissus2.data.SyncSettings
+import android.os.Build
+import pl.yggdrasil.narcissus2.BuildConfig
+import pl.yggdrasil.narcissus2.domain.ActivityMode
 import pl.yggdrasil.narcissus2.domain.Session
+import pl.yggdrasil.narcissus2.domain.SessionSource
 import pl.yggdrasil.narcissus2.domain.TrackPoint
 import pl.yggdrasil.narcissus2.i18n.tr
 
@@ -142,6 +146,42 @@ class ArchiveViewModel(app: Application) : AndroidViewModel(app) {
             // następnym połączeniu z heimdallem.
             store.delete(id)
             _state.update { it.copy(opened = null, pendingDelete = null) }
+            refresh()
+        }
+    }
+
+    /**
+     * Ręczny wpis: bieżnia, awaria telefonu i tym podobne. Bez śladu,
+     * więc serwer nie liczy przewyższenia, a raport techniczny go pomija.
+     */
+    fun addManual(
+        mode: ActivityMode,
+        source: SessionSource,
+        startedAt: Long,
+        elapsedMs: Long,
+        distanceM: Double,
+        steps: Int,
+    ) {
+        val speed = if (elapsedMs > 0) (distanceM / (elapsedMs / 1000.0)).toFloat() else 0f
+        viewModelScope.launch {
+            store.save(
+                Session(
+                    mode = mode,
+                    startedAt = startedAt,
+                    endedAt = startedAt + elapsedMs,
+                    distanceM = distanceM,
+                    elapsedMs = elapsedMs,
+                    movingMs = elapsedMs,
+                    avgMovingSpeedMps = speed,
+                    maxSpeedMps = speed,
+                    totalSteps = steps,
+                    acceptedFixes = 0,
+                    rejectedFixes = 0,
+                    source = source,
+                    deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}",
+                    appVersion = BuildConfig.VERSION_NAME,
+                ),
+            )
             refresh()
         }
     }

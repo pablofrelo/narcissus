@@ -138,6 +138,7 @@ class MainActivity : ComponentActivity() {
                                 onSync = archive::runSync,
                                 onDeleteTests = archive::deleteAllTest,
                                 onServerUrl = archive::setServerUrl,
+                                onAddManual = archive::addManual,
                             )
                         }
                     }

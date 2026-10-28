@@ -1,5 +1,6 @@
 package pl.yggdrasil.narcissus2.domain
 
+import pl.yggdrasil.narcissus2.i18n.Txt
 import java.util.UUID
 
 /**
@@ -58,6 +59,9 @@ data class Session(
      */
     val deviceModel: String? = null,
     val appVersion: String? = null,
+
+    /** Skąd wpis. Null = nagrany przez GPS; inaczej wpisany ręcznie. */
+    val source: SessionSource? = null,
 ) {
     val alive: Boolean get() = deletedAt == null
 }
@@ -72,3 +76,10 @@ data class TrackPoint(
     /** Surowa wysokość z GNSS — orientacyjna, patrz [AltitudeSource]. */
     val altitudeM: Double?,
 )
+
+/** Powód ręcznego wpisu. Ręczna sesja nie ma śladu ani fixów. */
+enum class SessionSource(val label: Txt) {
+    Treadmill(Txt("TREADMILL", "BIEŻNIA")),
+    Failure(Txt("FAILURE", "AWARIA")),
+    Other(Txt("OTHER", "INNE")),
+}

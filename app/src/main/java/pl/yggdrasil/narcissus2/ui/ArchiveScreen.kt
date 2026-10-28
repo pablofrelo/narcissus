@@ -45,7 +45,11 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import pl.yggdrasil.narcissus2.domain.ActivityMode
 import pl.yggdrasil.narcissus2.domain.Session
+import pl.yggdrasil.narcissus2.domain.SessionSource
+import java.time.LocalDateTime
+import java.time.Year
 import pl.yggdrasil.narcissus2.i18n.tr
 import pl.yggdrasil.narcissus2.share.StoryCard
 import pl.yggdrasil.narcissus2.ui.components.Label
@@ -71,10 +75,12 @@ fun ArchiveScreen(
     onSync: () -> Unit,
     onDeleteTests: () -> Unit,
     onServerUrl: (String) -> Unit,
+    onAddManual: (ActivityMode, SessionSource, Long, Long, Double, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val p = Theme.palette
     var editingServer by remember { mutableStateOf(false) }
+    var addingManual by remember { mutableStateOf(false) }
 
     Column(
         modifier
@@ -98,6 +104,13 @@ fun ArchiveScreen(
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (opened == null) {
+                    Label(
+                        "[+]",
+                        color = if (addingManual) p.phosphor else p.dim,
+                        softWrap = false,
+                        modifier = Modifier.tap { addingManual = !addingManual },
+                    )
+
                     Label(
                         "[SRV]",
                         color = if (editingServer) p.phosphor else p.dim,
@@ -128,6 +141,13 @@ fun ArchiveScreen(
             ServerField(state.serverUrl) {
                 onServerUrl(it)
                 editingServer = false
+            }
+        }
+
+        if (addingManual && opened == null) {
+            ManualForm { mode, source, start, elapsed, dist, steps ->
+                onAddManual(mode, source, start, elapsed, dist, steps)
+                addingManual = false
             }
         }
 
@@ -249,9 +269,14 @@ private fun SessionRow(
                 softWrap = false,
             )
 
+            val tag = when {
+                session.test -> "${session.mode.label.text} / TEST"
+                session.source != null -> "${session.mode.label.text} / ${session.source.label.text}"
+                else -> session.mode.label.text
+            }
             Label(
-                if (session.test) "${session.mode.label.text} / TEST" else session.mode.label.text,
-                color = if (session.test) p.amber else p.phosphor,
+                tag,
+                color = if (session.test || session.source != null) p.amber else p.phosphor,
                 softWrap = false,
             )
         }
@@ -540,4 +565,92 @@ private fun ServerField(current: String, onSave: (String) -> Unit) {
             modifier = Modifier.align(Alignment.End).tap { onSave(text) },
         )
     }
+}
+
+private val START = DateTimeFormatter.ofPattern("dd.MM HH:mm")
+
+/**
+ * Ręczny wpis sesji: bieżnia, awaria telefonu, cokolwiek bez GPS.
+ * Tryb i źródło przełącza się stuknięciem, resztę wpisuje z klawiatury.
+ */
+@Composable
+private fun ManualForm(onSave: (ActivityMode, SessionSource, Long, Long, Double, Int) -> Unit) {
+    val p = Theme.palette
+    var mode by remember { mutableStateOf(ActivityMode.Run) }
+    var source by remember { mutableStateOf(SessionSource.Treadmill) }
+    var start by remember { mutableStateOf(LocalDateTime.now().format(START)) }
+    var minutes by remember { mutableStateOf("") }
+    var km by remember { mutableStateOf("") }
+    var steps by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Panel {
+        Label(tr("MANUAL ENTRY", "WPIS RĘCZNY"), color = p.dim, softWrap = false)
+
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Label(
+                "[${mode.label.text}]",
+                color = p.phosphor,
+                softWrap = false,
+                modifier = Modifier.tap { mode = ActivityMode.entries[(mode.ordinal + 1) % ActivityMode.entries.size] },
+            )
+            Label(
+                "[${source.label.text}]",
+                color = p.amber,
+                softWrap = false,
+                modifier = Modifier.tap { source = SessionSource.entries[(source.ordinal + 1) % SessionSource.entries.size] },
+            )
+        }
+
+        Field(tr("START (DD.MM HH:MM)", "START (DD.MM GG:MM)"), start, KeyboardType.Text) { start = it }
+        Field(tr("TIME (MIN)", "CZAS (MIN)"), minutes, KeyboardType.Number) { minutes = it }
+        Field(tr("DISTANCE (KM)", "DYSTANS (KM)"), km, KeyboardType.Decimal) { km = it }
+        Field(tr("STEPS (OPTIONAL)", "KROKI (OPCJONALNIE)"), steps, KeyboardType.Number) { steps = it }
+
+        error?.let { Label(it, color = p.alarm, softWrap = false) }
+
+        Label(
+            tr("[SAVE]", "[ZAPISZ]"),
+            color = p.phosphor,
+            softWrap = false,
+            modifier = Modifier.align(Alignment.End).tap {
+                val startAt = runCatching {
+                    LocalDateTime.parse("${Year.now().value}.$start", DateTimeFormatter.ofPattern("yyyy.dd.MM HH:mm"))
+                        .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                }.getOrNull()
+                val min = minutes.trim().replace(',', '.').toDoubleOrNull()
+                val dist = km.trim().replace(',', '.').toDoubleOrNull()
+                val st = steps.trim().ifEmpty { "0" }.toIntOrNull()
+                error = when {
+                    startAt == null -> tr("BAD START", "ZŁY START")
+                    min == null || min <= 0 -> tr("BAD TIME", "ZŁY CZAS")
+                    dist == null || dist < 0 -> tr("BAD DISTANCE", "ZŁY DYSTANS")
+                    st == null || st < 0 -> tr("BAD STEPS", "ZŁE KROKI")
+                    else -> null
+                }
+                if (error == null) {
+                    onSave(mode, source, startAt!!, (min!! * 60_000).toLong(), dist!! * 1000.0, st!!)
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun Field(label: String, value: String, type: KeyboardType, onChange: (String) -> Unit) {
+    val p = Theme.palette
+    Label(label, color = p.dim, softWrap = false)
+    BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        singleLine = true,
+        textStyle = TextStyle(
+            color = p.readout,
+            fontFamily = Type.Readout,
+            fontSize = gridSp(Grid.VALUE_SMALL),
+        ),
+        cursorBrush = SolidColor(p.phosphor),
+        keyboardOptions = KeyboardOptions(keyboardType = type, imeAction = ImeAction.Next),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+    )
 }

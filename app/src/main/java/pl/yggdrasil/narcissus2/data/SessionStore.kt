@@ -7,6 +7,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import pl.yggdrasil.narcissus2.domain.ActivityMode
 import pl.yggdrasil.narcissus2.domain.Session
+import pl.yggdrasil.narcissus2.domain.SessionSource
 import pl.yggdrasil.narcissus2.domain.TrackPoint
 import java.io.File
 
@@ -207,6 +208,7 @@ class SessionStore(context: Context) {
         .put("synced", synced)
         .apply { deviceModel?.let { put("deviceModel", it) } }
         .apply { appVersion?.let { put("appVersion", it) } }
+        .apply { source?.let { put("source", it.name) } }
     }
 
     // isNull, nie has: serwer odsyła brakujące pola jako null, a has()
@@ -235,6 +237,7 @@ class SessionStore(context: Context) {
         synced = optBoolean("synced", false),
         deviceModel = if (isNull("deviceModel")) null else getString("deviceModel"),
         appVersion = if (isNull("appVersion")) null else getString("appVersion"),
+        source = if (isNull("source")) null else runCatching { SessionSource.valueOf(getString("source")) }.getOrNull(),
         )
     }
 

@@ -35,7 +35,7 @@ FIELDS = [
     "id", "mode", "startedAt", "endedAt", "distanceM", "elapsedMs", "movingMs",
     "avgMovingSpeedMps", "maxSpeedMps", "totalSteps", "acceptedFixes",
     "rejectedFixes", "ascentM", "pointCount", "test", "updatedAt", "deletedAt",
-    "deviceModel", "appVersion",
+    "deviceModel", "appVersion", "source",
 ]
 
 
@@ -63,12 +63,13 @@ def db():
             deletedAt INTEGER,
             device TEXT,
             deviceModel TEXT,
-            appVersion TEXT
+            appVersion TEXT,
+            source TEXT
         )
     """)
     # Istniejąca baza sprzed tych kolumn — dokładamy je w miejscu.
     have = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)")}
-    for col in ("deviceModel", "appVersion"):
+    for col in ("deviceModel", "appVersion", "source"):
         if col not in have:
             conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_updated ON sessions(updatedAt)")
